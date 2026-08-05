@@ -102,6 +102,31 @@
   .map-copy { font-size: .9rem; line-height: 1.55; color: var(--ink-soft); margin-top: 12px; }
   .map-copy b { color: var(--ink); }
   .map-note { font-size: .78rem; color: var(--ink-faint); margin-top: 10px; font-style: italic; }
+
+  /* ---------- room mapper ---------- */
+  .map-svg { width: 100%; display: block; border-radius: 8px; background: var(--ground); }
+  .map-unit { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .map-head, .map-row { display: grid; grid-template-columns: 22px 1fr 88px 26px; gap: 6px; align-items: center; }
+  .map-head { font-size: .64rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); font-weight: 600; margin: 14px 0 6px; padding: 0 2px; }
+  .map-row { margin-bottom: 6px; }
+  .map-n { font-family: ui-monospace, Menlo, monospace; font-size: .78rem; color: var(--ink-faint); font-weight: 700; text-align: center; }
+  .map-dirs { display: flex; gap: 3px; }
+  .map-dir { flex: 1; font: inherit; font-size: .98rem; font-weight: 700; line-height: 1; cursor: pointer; padding: 9px 0; border-radius: 7px; background: var(--ground); color: var(--ink-soft); border: 1.5px solid var(--panel-edge); transition: .12s; }
+  .map-dir:hover { border-color: var(--chalk); color: var(--ink); }
+  .map-dir[aria-pressed="true"] { background: var(--chalk); border-color: var(--chalk); color: #fff; }
+  .map-row input { font: inherit; font-family: ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; font-size: .92rem; padding: 8px 6px; width: 100%; text-align: center; color: var(--ink); background: var(--ground); border: 1.5px solid var(--panel-edge); border-radius: 8px; -moz-appearance: textfield; }
+  .map-row input::-webkit-outer-spin-button, .map-row input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .map-row input:focus-visible { outline: none; border-color: var(--chalk); box-shadow: 0 0 0 3px var(--chalk-wash); }
+  .map-ang { grid-column: 2 / 4; display: flex; align-items: center; gap: 8px; margin: -2px 0 8px; font-size: .78rem; color: var(--ink-soft); }
+  .map-ang input { width: 74px; }
+  .map-status { margin-top: 13px; font-size: .86rem; font-weight: 600; display: flex; gap: 8px; align-items: flex-start; line-height: 1.45; }
+  .map-status.ok { color: var(--chalk-deep); }
+  .map-status.gap { color: var(--warn); }
+  .map-ctls { display: flex; flex-direction: column; gap: 15px; margin-top: 15px; }
+  .map-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--panel-edge); border: 1px solid var(--panel-edge); border-radius: 10px; overflow: hidden; margin-top: 13px; }
+  .map-stat { background: var(--panel); padding: 11px 8px; text-align: center; }
+  .map-stat .num { font-size: 1.32rem; font-weight: 750; letter-spacing: -.02em; font-family: ui-monospace, Menlo, monospace; }
+  .map-stat .cap { font-size: .64rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); font-weight: 600; margin-top: 1px; }
   .mono { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
 
   /* Brand + tabs */
@@ -610,26 +635,48 @@
     </div>
   </section>
 
-  <!-- ============ MAP (teaser) ============ -->
+  <!-- ============ MAP — room mapper ============ -->
   <section id="panel-map" class="panel" role="tabpanel" hidden>
     <div class="card">
-      <p class="label">Map any room <span class="hint">coming next</span></p>
-      <svg class="map-demo" viewBox="0 0 300 300" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-        <defs><clipPath id="room-demo"><polygon points="30,30 270,30 270,150 150,150 150,270 30,270"/></clipPath></defs>
-        <g clip-path="url(#room-demo)">
-          <rect x="0" y="0" width="300" height="300" fill="var(--tile-full)"/>
-          <g stroke="var(--grout)" stroke-width="1.4">
-            <line x1="54" y1="0" x2="54" y2="300"/><line x1="78" y1="0" x2="78" y2="300"/><line x1="102" y1="0" x2="102" y2="300"/><line x1="126" y1="0" x2="126" y2="300"/><line x1="150" y1="0" x2="150" y2="300"/><line x1="174" y1="0" x2="174" y2="300"/><line x1="198" y1="0" x2="198" y2="300"/><line x1="222" y1="0" x2="222" y2="300"/><line x1="246" y1="0" x2="246" y2="300"/>
-            <line x1="0" y1="54" x2="300" y2="54"/><line x1="0" y1="78" x2="300" y2="78"/><line x1="0" y1="102" x2="300" y2="102"/><line x1="0" y1="126" x2="300" y2="126"/><line x1="0" y1="150" x2="300" y2="150"/><line x1="0" y1="174" x2="300" y2="174"/><line x1="0" y1="198" x2="300" y2="198"/><line x1="0" y1="222" x2="300" y2="222"/><line x1="0" y1="246" x2="300" y2="246"/>
-          </g>
-        </g>
-        <polygon points="30,30 270,30 270,150 150,150 150,270 30,270" fill="none" stroke="var(--chalk)" stroke-width="2.5" stroke-linejoin="round"/>
-        <circle cx="30" cy="30" r="5" fill="var(--chalk)"/>
-        <text x="150" y="22" text-anchor="middle" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="var(--ink-soft)">10 ft</text>
-        <text x="284" y="94" text-anchor="middle" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="var(--ink-soft)" transform="rotate(90 284 94)">5 ft</text>
-      </svg>
-      <p class="map-copy">Real floors aren't rectangles. Here's the plan: you <b>walk the walls</b> — "right 10 ft, down 5, left 5…" — and it draws the room top-down as you go. If your last wall doesn't close the shape, it flags the gap so you catch the mistake. Then the tile lays over the true outline, cuts following the real walls, like a blueprint.</p>
-      <p class="map-note">This is the next build — the interactive version where you trace your room and watch the tile fill it live.</p>
+      <p class="label">Walk the walls <span class="hint">start in a corner, go around</span></p>
+      <div class="chips" id="map-presets"></div>
+      <div class="map-unit">
+        <span class="pv-lbl">Lengths in</span>
+        <div class="seg" id="map-unit">
+          <button type="button" data-u="ft" aria-pressed="true">feet</button>
+          <button type="button" data-u="in" aria-pressed="false">inches</button>
+        </div>
+      </div>
+      <div class="map-head"><span>#</span><span>Which way</span><span>How far</span><span></span></div>
+      <div id="map-segs"></div>
+      <div class="addrow">
+        <button class="btn-ghost" id="map-add" type="button">+ Wall</button>
+        <button class="btn-ghost" id="map-fit" type="button">Close the loop</button>
+      </div>
+      <div id="map-status" class="map-status"></div>
+    </div>
+
+    <div class="card">
+      <p class="label">The floor <span class="hint">your real outline, tiled</span></p>
+      <svg class="map-svg" id="map-svg" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+      <div class="map-stats">
+        <div class="map-stat"><div class="num" id="map-area">—</div><div class="cap">sq ft</div></div>
+        <div class="map-stat"><div class="num" id="map-full">—</div><div class="cap">Full tiles</div></div>
+        <div class="map-stat"><div class="num" id="map-cuts">—</div><div class="cap">Cuts</div></div>
+      </div>
+      <div class="map-ctls">
+        <div class="pv-ctl">
+          <span class="pv-lbl">Start the grid</span>
+          <div class="seg" id="map-origin">
+            <button type="button" data-o="center" aria-pressed="true">Centered</button>
+            <button type="button" data-o="corner" aria-pressed="false">From the corner</button>
+          </div>
+        </div>
+        <div class="pv-ctl"><span class="pv-lbl">Nudge across <span id="map-nx-val" class="mono"></span></span><input type="range" id="map-nx" min="-12" max="12" step="0.25" value="0"></div>
+        <div class="pv-ctl"><span class="pv-lbl">Nudge up &amp; down <span id="map-ny-val" class="mono"></span></span><input type="range" id="map-ny" min="-12" max="12" step="0.25" value="0"></div>
+      </div>
+      <div id="map-cutlist" class="cutlist"></div>
+      <p class="surf2d-note" id="map-note"></p>
     </div>
   </section>
 
@@ -1714,6 +1761,409 @@ window.TBstate = {
     var jobs = load(); delete jobs[name]; store(jobs); refresh('');
   });
   refresh('');
+})();
+
+/* ============ MAP — room mapper: walk the walls → tiled blueprint ============
+   Traverse in (direction + length per wall) → polygon → ear-clip triangulation →
+   every tile clipped against the true outline. Cuts follow the real walls, so an
+   L-shaped room or an angled wall is just geometry, not a special case.        */
+(function () {
+  var NS = 'http://www.w3.org/2000/svg', SLIVER = 2.0, MAXCELLS = 7000;
+  var svg = document.getElementById('map-svg');
+  if (!svg) return;
+  var segsEl = document.getElementById('map-segs'), statusEl = document.getElementById('map-status');
+  var cutEl = document.getElementById('map-cutlist'), noteEl = document.getElementById('map-note');
+
+  var DIRS = [['R', '→', 0], ['D', '↓', 90], ['L', '←', 180], ['U', '↑', 270], ['A', '∠', null]];
+  var PRESETS = {
+    rect: [['R', 144], ['D', 120], ['L', 144], ['U', 120]],
+    L: [['R', 144], ['D', 72], ['L', 72], ['D', 72], ['L', 72], ['U', 144]],
+    U: [['R', 144], ['D', 120], ['L', 48], ['U', 72], ['L', 48], ['D', 72], ['L', 48], ['U', 120]],
+    galley: [['R', 96], ['D', 60], ['L', 96], ['U', 60]]
+  };
+  function seed(k) { return PRESETS[k].map(function (s) { return { dir: s[0], len: s[1], ang: 0 }; }); }
+  var state = { unit: 'ft', origin: 'center', nx: 0, ny: 0, preset: 'L', segs: seed('L') };
+  var doneCuts = {}, activeCut = null;
+
+  /* ---- formatting ---- */
+  function toDim(x) {
+    var neg = x < 0; x = Math.abs(x);
+    var whole = Math.floor(x + 1e-9), frac = x - whole, six = Math.round(frac * 16);
+    if (six === 16) { whole += 1; six = 0; }
+    var num = six, den = 16;
+    while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; }
+    var s = '';
+    if (whole > 0) s += whole;
+    if (num > 0) s += (whole > 0 ? ' ' : '') + num + '/' + den;
+    if (s === '') s = '0';
+    return (neg ? '-' : '') + s + '″';
+  }
+  function fmtLen(inches) {
+    if (state.unit === 'in') return toDim(inches);
+    var ft = Math.floor(inches / 12 + 1e-9), rem = inches - ft * 12;
+    if (rem < 1 / 32) return ft + '′';
+    return (ft > 0 ? ft + '′ ' : '') + toDim(rem);
+  }
+  function toUnit(inches) { return state.unit === 'ft' ? inches / 12 : inches; }
+  function fromUnit(v) { return state.unit === 'ft' ? v * 12 : v; }
+
+  /* ---- geometry ---- */
+  function area2(p) { var a = 0; for (var i = 0, j = p.length - 1; i < p.length; j = i++) a += p[j].x * p[i].y - p[i].x * p[j].y; return a; }
+  function polyArea(p) { return Math.abs(area2(p)) / 2; }
+  function cross(a, b, c) { return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x); }
+  function bboxOf(polys) {
+    var b = { x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9 };
+    polys.forEach(function (p) { p.forEach(function (v) { if (v.x < b.x0) b.x0 = v.x; if (v.x > b.x1) b.x1 = v.x; if (v.y < b.y0) b.y0 = v.y; if (v.y > b.y1) b.y1 = v.y; }); });
+    return b;
+  }
+  // ear clipping — correct for a simple polygon (no holes, no self-crossing)
+  function triangulate(poly) {
+    var v = poly.slice(), out = [];
+    if (v.length < 3) return out;
+    if (area2(v) < 0) v.reverse();
+    var guard = 0;
+    while (v.length > 3 && guard++ < 5000) {
+      var made = false;
+      for (var i = 0; i < v.length; i++) {
+        var a = v[(i + v.length - 1) % v.length], b = v[i], c = v[(i + 1) % v.length];
+        if (cross(a, b, c) <= 1e-9) continue;              // reflex or collinear — not an ear
+        var clean = true;
+        for (var j = 0; j < v.length; j++) {
+          var p = v[j];
+          if (p === a || p === b || p === c) continue;
+          if (cross(a, b, p) >= 0 && cross(b, c, p) >= 0 && cross(c, a, p) >= 0) { clean = false; break; }
+        }
+        if (!clean) continue;
+        out.push([a, b, c]); v.splice(i, 1); made = true; break;
+      }
+      if (!made) break;
+    }
+    if (v.length === 3) out.push([v[0], v[1], v[2]]);
+    return out;
+  }
+  // Sutherland–Hodgman: clip any polygon against a CONVEX one (our triangles)
+  function clipTo(sub, clip) {
+    var c = clip.slice();
+    if (area2(c) < 0) c.reverse();
+    var out = sub;
+    for (var i = 0; i < c.length && out.length; i++) {
+      var A = c[i], B = c[(i + 1) % c.length], inp = out; out = [];
+      for (var j = 0; j < inp.length; j++) {
+        var P = inp[j], Q = inp[(j + 1) % inp.length];
+        var dp = cross(A, B, P), dq = cross(A, B, Q);
+        if (dp >= -1e-9) out.push(P);
+        if ((dp > 1e-9 && dq < -1e-9) || (dp < -1e-9 && dq > 1e-9)) {
+          var t = dp / (dp - dq);
+          out.push({ x: P.x + (Q.x - P.x) * t, y: P.y + (Q.y - P.y) * t });
+        }
+      }
+    }
+    return out;
+  }
+
+  /* ---- the traverse ---- */
+  function angOf(s) { var d = DIRS.filter(function (x) { return x[0] === s.dir; })[0]; return d && d[2] !== null ? d[2] : (s.ang || 0); }
+  function verts() {
+    var p = { x: 0, y: 0 }, out = [{ x: 0, y: 0 }];
+    state.segs.forEach(function (s) {
+      var a = angOf(s) * Math.PI / 180, L = s.len || 0;
+      p = { x: p.x + Math.cos(a) * L, y: p.y + Math.sin(a) * L };
+      out.push(p);
+    });
+    return out;
+  }
+  function gap() { var v = verts(), a = v[0], b = v[v.length - 1]; return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)); }
+  function room() {  // closed polygon for tiling (drops a duplicate end point)
+    var v = verts();
+    if (v.length > 2 && gap() < 0.02) v = v.slice(0, -1);
+    return v;
+  }
+
+  /* ---- tile cells over the bounding box ---- */
+  function cells(bb, tile, grout, pat) {
+    var mod = tile + grout, list = [], i, j;
+    if (pat === 'herring') {
+      var s = tile / 2, cx = (bb.x0 + bb.x1) / 2 + state.nx, cy = (bb.y0 + bb.y1) / 2 + state.ny;
+      var N = Math.ceil(Math.max(bb.x1 - bb.x0, bb.y1 - bb.y0) / s) + 6;
+      for (i = -N; i <= N; i++) for (j = -N; j <= N; j++) {
+        var px = cx + (i * -3 + j * -2) * s, py = cy + (i * -1 + j * -2) * s;
+        list.push({ x: px, y: py, w: 2 * s, h: s });
+        list.push({ x: px - 2 * s, y: py, w: s, h: 2 * s });
+      }
+      return list.filter(function (c) { return c.x < bb.x1 && c.x + c.w > bb.x0 && c.y < bb.y1 && c.y + c.h > bb.y0; });
+    }
+    var ax = (state.origin === 'corner' ? bb.x0 : (bb.x0 + bb.x1) / 2 - tile / 2) + state.nx;
+    var ay = (state.origin === 'corner' ? bb.y0 : (bb.y0 + bb.y1) / 2 - tile / 2) + state.ny;
+    var r0 = Math.floor((bb.y0 - ay) / mod) - 1, r1 = Math.ceil((bb.y1 - ay) / mod) + 1;
+    for (var r = r0; r <= r1; r++) {
+      var off = pat === 'brick' ? ((((r % 2) + 2) % 2) ? tile / 2 : 0) : pat === 'thirds' ? ((((r % 3) + 3) % 3) * tile / 3) : 0;
+      var c0 = Math.floor((bb.x0 - ax - off) / mod) - 1, c1 = Math.ceil((bb.x1 - ax - off) / mod) + 1;
+      for (var c = c0; c <= c1; c++) list.push({ x: ax + off + c * mod, y: ay + r * mod, w: tile, h: tile });
+    }
+    return list;
+  }
+
+  /* ---- lay the tile into the room ---- */
+  function layTile() {
+    var poly = room();
+    if (poly.length < 3) return null;
+    var T = window.TB || {}, tile = T.tile || 12, grout = (T.grout === undefined ? 0.125 : T.grout), pat = T.pattern || 'straight';
+    if (pat === 'vertical') pat = 'straight';
+    var tris = triangulate(poly);
+    if (!tris.length) return null;
+    var bb = bboxOf([poly]);
+    var list = cells(bb, tile, grout, pat);
+    if (list.length > MAXCELLS) return { over: list.length, poly: poly, bb: bb };
+    var pieces = [], full = 0, cutN = 0;
+    var cellArea = tile * tile;
+    list.forEach(function (c) {
+      var rect = [{ x: c.x, y: c.y }, { x: c.x + c.w, y: c.y }, { x: c.x + c.w, y: c.y + c.h }, { x: c.x, y: c.y + c.h }];
+      var parts = [], a = 0;
+      for (var t = 0; t < tris.length; t++) {
+        var q = clipTo(rect, tris[t]);
+        if (q.length > 2) { var qa = polyArea(q); if (qa > 1e-4) { parts.push(q); a += qa; } }
+      }
+      if (a < 0.05) return;                                   // outside the room
+      var whole = a >= c.w * c.h - Math.max(0.05, c.w * c.h * 0.002);
+      if (whole) { full++; pieces.push({ parts: parts, full: true }); return; }
+      cutN++;
+      var pb = bboxOf(parts), w = pb.x1 - pb.x0, h = pb.y1 - pb.y0;
+      var isRect = Math.abs(a - w * h) <= Math.max(0.06, w * h * 0.02);
+      var sliver = Math.min(w, h) <= SLIVER;
+      var key = isRect ? (toDim(w) + ' × ' + toDim(h))
+                       : ('∠ ' + toDim(w) + ' × ' + toDim(h) + ' · ' + a.toFixed(0) + ' sq in');
+      pieces.push({ parts: parts, full: false, key: key, w: w, h: h, sliver: sliver, rect: isRect, bb: pb });
+    });
+    // group + number the cuts, biggest batch first
+    var groups = {}, order = [];
+    pieces.forEach(function (p) {
+      if (p.full) return;
+      if (!groups[p.key]) { groups[p.key] = { n: 0, num: 0, key: p.key, sliver: p.sliver, rect: p.rect }; order.push(p.key); }
+      groups[p.key].n++;
+    });
+    order.sort(function (a, b) { return groups[b].n - groups[a].n; });
+    order.forEach(function (k, i) { groups[k].num = i + 1; });
+    return { poly: poly, bb: bb, pieces: pieces, full: full, cuts: cutN, groups: groups, order: order,
+             tile: tile, pat: pat, area: polyArea(poly) / 144 };
+  }
+
+  /* ---- draw the blueprint ---- */
+  var suppressed = false;
+  function draw(R) {
+    suppressed = false;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var v = verts(), bb = bboxOf([v]);
+    var W = Math.max(1, bb.x1 - bb.x0), H = Math.max(1, bb.y1 - bb.y0), pad = Math.max(W, H) * 0.17;
+    svg.setAttribute('viewBox', (bb.x0 - pad) + ' ' + (bb.y0 - pad) + ' ' + (W + 2 * pad) + ' ' + (H + 2 * pad));
+    var pxW = svg.clientWidth || 480;
+    svg.style.height = Math.max(160, Math.min(430, pxW * (H + 2 * pad) / (W + 2 * pad))) + 'px';
+    var unitPx = (W + 2 * pad) / pxW;                       // inches per screen px — keeps strokes/text even
+    function add(tag, attrs, text) {
+      var e = document.createElementNS(NS, tag);
+      for (var k in attrs) e.setAttribute(k, attrs[k]);
+      if (text !== undefined) e.textContent = text;
+      svg.appendChild(e); return e;
+    }
+    if (R && R.pieces) {
+      var gi = Math.min((window.TB && window.TB.grout || 0.125) / 2, R.tile * 0.05);
+      R.pieces.forEach(function (p) {
+        var g = p.full ? null : R.groups[p.key];
+        var done = g ? !!doneCuts[p.key] : false, act = g && activeCut === p.key;
+        var fill = p.full ? 'var(--tile-full)' : (done ? 'var(--tile-full-edge)' : (g && g.sliver ? 'var(--warn)' : 'var(--chalk)'));
+        p.parts.forEach(function (q) {
+          add('polygon', {
+            points: q.map(function (pt) { return pt.x.toFixed(2) + ',' + pt.y.toFixed(2); }).join(' '),
+            fill: fill, stroke: fill, 'stroke-width': (gi * 0.9).toFixed(3),
+            'stroke-linejoin': 'round', opacity: done ? 0.5 : 1
+          });
+        });
+        if (g) {
+          // a number too small to read is worse than none — but a tapped row always shows,
+          // scaled up to legible even if it overhangs the piece. That tap IS the finder.
+          var fs = Math.min(Math.min(p.w, p.h) * 0.52, R.tile * 0.4), show = fs > unitPx * 7;
+          if (act) { fs = Math.max(fs, unitPx * 13); show = true; } else if (!show) suppressed = true;
+          if (act) p.parts.forEach(function (q) {
+            add('polygon', { points: q.map(function (pt) { return pt.x.toFixed(2) + ',' + pt.y.toFixed(2); }).join(' '),
+              fill: 'none', stroke: 'var(--ink)', 'stroke-width': (unitPx * 2).toFixed(2), 'stroke-linejoin': 'round' });
+          });
+          if (show) {
+            add('text', {
+              x: ((p.bb.x0 + p.bb.x1) / 2).toFixed(1), y: ((p.bb.y0 + p.bb.y1) / 2).toFixed(1),
+              'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': fs.toFixed(1),
+              'font-weight': '700', fill: act ? 'var(--ink)' : (g.sliver ? '#fff' : 'var(--ground)'),
+              opacity: done ? .5 : .95, stroke: act ? 'var(--panel)' : 'none',
+              'stroke-width': act ? (unitPx * 2.4).toFixed(2) : 0, 'paint-order': 'stroke',
+              'font-family': 'ui-monospace,Menlo,monospace'
+            }, g.num);
+          }
+        }
+      });
+    }
+    // the outline + wall labels
+    var closed = gap() < 0.02;
+    add('polyline', { points: v.map(function (p) { return p.x.toFixed(2) + ',' + p.y.toFixed(2); }).join(' '),
+      fill: 'none', stroke: 'var(--chalk)', 'stroke-width': (unitPx * 2.5).toFixed(2), 'stroke-linejoin': 'round', 'stroke-linecap': 'round' });
+    if (!closed && v.length > 2) {
+      add('line', { x1: v[v.length - 1].x, y1: v[v.length - 1].y, x2: v[0].x, y2: v[0].y,
+        stroke: 'var(--warn)', 'stroke-width': (unitPx * 2.5).toFixed(2), 'stroke-dasharray': (unitPx * 7) + ' ' + (unitPx * 6) });
+    }
+    var fs2 = unitPx * 11;
+    state.segs.forEach(function (s, i) {
+      var a = v[i], b = v[i + 1]; if (!b || !s.len) return;
+      var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      var dx = b.x - a.x, dy = b.y - a.y, L = Math.sqrt(dx * dx + dy * dy) || 1;
+      var ox = -dy / L * fs2 * 1.5, oy = dx / L * fs2 * 1.5;
+      var cen = { x: (bb.x0 + bb.x1) / 2, y: (bb.y0 + bb.y1) / 2 };
+      if ((mx + ox - cen.x) * (mx - cen.x) + (my + oy - cen.y) * (my - cen.y) < (mx - cen.x) * (mx - cen.x) + (my - cen.y) * (my - cen.y)) { ox = -ox; oy = -oy; }
+      add('text', { x: (mx + ox).toFixed(1), y: (my + oy).toFixed(1), 'text-anchor': 'middle', 'dominant-baseline': 'central',
+        'font-size': fs2.toFixed(1), fill: 'var(--ink-soft)', 'font-family': 'ui-monospace,Menlo,monospace', 'font-weight': '600' }, fmtLen(s.len));
+    });
+    add('circle', { cx: v[0].x, cy: v[0].y, r: (unitPx * 4.5).toFixed(2), fill: 'var(--chalk)' });
+  }
+
+  /* ---- cut list ---- */
+  function cutlist(R) {
+    if (!R || !R.order) { cutEl.innerHTML = ''; return; }
+    var doneN = 0; R.order.forEach(function (k) { if (doneCuts[k]) doneN++; });
+    var html = '<div class="cutrow total"><span class="k">Total tiles</span><span class="cnt">' + (R.full + R.cuts) + '</span></div>' +
+      '<div class="cutrow full"><span class="k">Full — no cut</span><span class="cnt">' + R.full + '</span></div>';
+    if (R.order.length) {
+      html += '<div class="cbn-head">Cut list &middot; ' + R.order.length + ' cut' + (R.order.length === 1 ? '' : 's') +
+        ' &mdash; tap a row to find it, ✓ as you cut <span class="cbn-prog">' + doneN + '/' + R.order.length + '</span></div>';
+    }
+    R.order.forEach(function (k) {
+      var g = R.groups[k], done = !!doneCuts[k];
+      html += '<div class="cbnrow' + (done ? ' done' : '') + (activeCut === k ? ' active' : '') + (g.sliver ? ' sliver' : '') + '" data-key="' + k.replace(/"/g, '&quot;') + '">' +
+        '<span class="cbn-num">' + g.num + '</span>' +
+        '<span class="cbn-mid"><span class="cbn-dim">' + k + '</span>' +
+        (g.sliver ? '<span class="cbn-lbl">sliver ⚠</span>' : (g.rect ? '' : '<span class="cbn-lbl">angled — trace it</span>')) +
+        '</span><span class="cbn-qty">×' + g.n + '</span>' +
+        '<span class="cbn-check" data-check="1" role="button" aria-label="Mark this cut done">' + (done ? '✓' : '') + '</span></div>';
+    });
+    cutEl.innerHTML = html;
+  }
+
+  /* ---- the wall rows ---- */
+  function renderSegs() {
+    segsEl.innerHTML = '';
+    state.segs.forEach(function (s, i) {
+      var row = document.createElement('div'); row.className = 'map-row';
+      var dirs = DIRS.map(function (d) {
+        return '<button class="map-dir" type="button" data-d="' + d[0] + '" aria-pressed="' + (s.dir === d[0] ? 'true' : 'false') + '" aria-label="' + d[0] + '">' + d[1] + '</button>';
+      }).join('');
+      row.innerHTML = '<span class="map-n">' + (i + 1) + '</span>' +
+        '<span class="map-dirs">' + dirs + '</span>' +
+        '<input type="number" step="0.25" min="0" inputmode="decimal" value="' + (Math.round(toUnit(s.len) * 1000) / 1000) + '" aria-label="Wall ' + (i + 1) + ' length">' +
+        '<button class="del" type="button" aria-label="Remove wall">×</button>';
+      row.querySelectorAll('.map-dir').forEach(function (b) {
+        b.addEventListener('click', function () { s.dir = b.dataset.d; state.preset = null; renderSegs(); sync(); });
+      });
+      row.querySelector('input').addEventListener('input', function (e) { s.len = fromUnit(parseFloat(e.target.value) || 0); state.preset = null; sync(); });
+      row.querySelector('.del').addEventListener('click', function () { state.segs.splice(i, 1); state.preset = null; renderSegs(); sync(); });
+      segsEl.appendChild(row);
+      if (s.dir === 'A') {
+        var ar = document.createElement('div'); ar.className = 'map-row';
+        ar.innerHTML = '<span></span><span class="map-ang">angle <input type="number" step="1" inputmode="decimal" value="' + (s.ang || 0) + '"> ° <span style="color:var(--ink-faint)">0 = right, 90 = down</span></span><span></span>';
+        ar.querySelector('input').addEventListener('input', function (e) { s.ang = parseFloat(e.target.value) || 0; sync(); });
+        segsEl.appendChild(ar);
+      }
+    });
+  }
+  function renderPresets() {
+    var host = document.getElementById('map-presets'); host.innerHTML = '';
+    [['rect', 'Rectangle'], ['L', 'L-shaped'], ['U', 'U-shaped'], ['galley', 'Galley']].forEach(function (p) {
+      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = p[1];
+      b.setAttribute('aria-pressed', state.preset === p[0] ? 'true' : 'false');
+      b.addEventListener('click', function () { state.preset = p[0]; state.segs = seed(p[0]); doneCuts = {}; activeCut = null; renderPresets(); renderSegs(); sync(); });
+      host.appendChild(b);
+    });
+  }
+  function status() {
+    var g = gap(), n = state.segs.length;
+    if (n < 3) { statusEl.className = 'map-status gap'; statusEl.innerHTML = '<span>⚠</span><span>A room needs at least 3 walls.</span>'; return; }
+    if (g < 0.02) { statusEl.className = 'map-status ok'; statusEl.innerHTML = '<span>✓</span><span>Closes clean — ' + n + ' walls.</span>'; }
+    else { statusEl.className = 'map-status gap'; statusEl.innerHTML = '<span>⚠</span><span>Off by <b>' + fmtLen(g) + '</b> — the last wall doesn\'t land back at the start. Fix a length, or tap <b>Close the loop</b>.</span>'; }
+  }
+
+  function sync() {
+    status();
+    var R = layTile();
+    draw(R);
+    var A = document.getElementById('map-area'), F = document.getElementById('map-full'), C = document.getElementById('map-cuts');
+    if (R && R.over) {
+      cutEl.innerHTML = ''; A.textContent = (polyArea(room()) / 144).toFixed(0); F.textContent = '—'; C.textContent = '—';
+      noteEl.textContent = 'That\'s ' + R.over.toLocaleString() + ' tiles — too many to lay out piece by piece on a phone. Bump the tile size up, or split the room into sections.';
+      return;
+    }
+    if (!R) {
+      cutEl.innerHTML = ''; A.textContent = '—'; F.textContent = '—'; C.textContent = '—';
+      noteEl.textContent = 'Walk the walls above and the floor draws itself.'; return;
+    }
+    cutlist(R);
+    A.textContent = R.area.toFixed(0); F.textContent = R.full; C.textContent = R.cuts;
+    var T = window.TB || {};
+    noteEl.textContent = 'Tile, grout and pattern come from the Layout tab — ' + toDim(R.tile) + ' ' +
+      ({ straight: 'straight', brick: 'running bond', thirds: 'third bond', herring: 'herringbone' }[R.pat] || R.pat) +
+      ', ' + toDim(T.grout === undefined ? 0.125 : T.grout) + ' joints. Full tiles in porcelain, cuts in blue, slivers (≤2″) in red. ' +
+      (suppressed ? 'The pieces are too small to number on screen at this size — tap a cut below and its tiles light up. ' : '') +
+      (gap() < 0.02 ? '' : 'Outline isn\'t closed yet — counts assume a straight run back to the start.');
+  }
+
+  /* ---- wiring ---- */
+  document.getElementById('map-add').addEventListener('click', function () {
+    state.segs.push({ dir: 'R', len: fromUnit(state.unit === 'ft' ? 4 : 48), ang: 0 }); state.preset = null; renderPresets(); renderSegs(); sync();
+  });
+  document.getElementById('map-fit').addEventListener('click', function () {   // add the wall that lands back on the start
+    var v = verts(), a = v[0], b = v[v.length - 1], dx = a.x - b.x, dy = a.y - b.y;
+    var L = Math.sqrt(dx * dx + dy * dy);
+    if (L < 0.02) return;
+    var ang = Math.round(Math.atan2(dy, dx) * 180 / Math.PI * 100) / 100;
+    var named = DIRS.filter(function (d) { return d[2] !== null && Math.abs(((ang - d[2]) % 360 + 360) % 360) < 0.05; })[0];
+    state.segs.push(named ? { dir: named[0], len: L, ang: 0 } : { dir: 'A', len: L, ang: ang });
+    state.preset = null; renderPresets(); renderSegs(); sync();
+  });
+  document.querySelectorAll('#map-unit button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      state.unit = b.dataset.u;
+      document.querySelectorAll('#map-unit button').forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+      renderSegs(); sync();
+    });
+  });
+  document.querySelectorAll('#map-origin button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      state.origin = b.dataset.o; doneCuts = {}; activeCut = null;
+      document.querySelectorAll('#map-origin button').forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+      sync();
+    });
+  });
+  ['nx', 'ny'].forEach(function (k) {
+    var el = document.getElementById('map-' + k), lab = document.getElementById('map-' + k + '-val');
+    el.addEventListener('input', function () { state[k] = +el.value; lab.textContent = toDim(Math.abs(state[k])) + (state[k] < 0 ? ' back' : ''); doneCuts = {}; activeCut = null; sync(); });
+    lab.textContent = '0″';
+  });
+  cutEl.addEventListener('click', function (e) {
+    var row = e.target.closest('.cbnrow'); if (!row) return;
+    var key = row.getAttribute('data-key');
+    if (e.target.closest('[data-check]')) doneCuts[key] = !doneCuts[key];
+    else activeCut = (activeCut === key) ? null : key;
+    sync();
+  });
+
+  window.TBstate.register('map', function () {
+    return { unit: state.unit, origin: state.origin, nx: state.nx, ny: state.ny, preset: state.preset, segs: JSON.parse(JSON.stringify(state.segs)) };
+  }, function (v) {
+    if (!v) return;
+    state.unit = v.unit || 'ft'; state.origin = v.origin || 'center'; state.nx = v.nx || 0; state.ny = v.ny || 0;
+    state.preset = v.preset; state.segs = v.segs || seed('L'); doneCuts = {}; activeCut = null;
+    document.querySelectorAll('#map-unit button').forEach(function (o) { o.setAttribute('aria-pressed', o.dataset.u === state.unit ? 'true' : 'false'); });
+    document.querySelectorAll('#map-origin button').forEach(function (o) { o.setAttribute('aria-pressed', o.dataset.o === state.origin ? 'true' : 'false'); });
+    document.getElementById('map-nx').value = state.nx; document.getElementById('map-ny').value = state.ny;
+    renderPresets(); renderSegs(); sync();
+  });
+
+  window.addEventListener('tb-change', sync);
+  window.addEventListener('resize', sync);
+  renderPresets(); renderSegs(); sync();
 })();
 
 /* ============ background herringbone linework ============ */
