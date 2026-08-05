@@ -320,6 +320,20 @@
   .cbnrow.done .cbn-dim { text-decoration: line-through; }
   .cbnrow.done .cbn-check { background: var(--chalk); border-color: var(--chalk); color: var(--ground); }
 
+  /* holes & penetrations */
+  #hole-list { margin-top: 12px; }
+  .hole-head, .hole-row { display: grid; grid-template-columns: 1fr 56px 56px 56px 24px; gap: 5px; align-items: center; }
+  .hole-head { font-size: .62rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); font-weight: 600; margin-bottom: 6px; padding: 0 2px; text-align: center; }
+  .hole-head span:first-child { text-align: left; }
+  .hole-row { margin-bottom: 6px; }
+  .hole-row .hname { font-weight: 650; font-size: .88rem; }
+  .hole-row input { font: inherit; font-family: ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; font-size: .88rem; padding: 7px 4px; width: 100%; text-align: center; color: var(--ink); background: var(--ground); border: 1.5px solid var(--panel-edge); border-radius: 8px; -moz-appearance: textfield; }
+  .hole-row input::-webkit-outer-spin-button, .hole-row input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .hole-row input:focus-visible { outline: none; border-color: var(--chalk); box-shadow: 0 0 0 3px var(--chalk-wash); }
+  .hole-empty { font-size: .8rem; color: var(--ink-faint); font-style: italic; padding: 4px 2px 2px; }
+  .cbnrow.hole .cbn-num { background: var(--amber); color: #fff; }
+  .cbnrow.hole .cbn-lbl { color: var(--amber); text-transform: none; letter-spacing: 0; font-size: .74rem; }
+
   /* job surfaces list */
   #surf-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 6px; }
   .surf-item { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; font: inherit; color: var(--ink); cursor: pointer; padding: 12px 14px; background: var(--ground); border: 1.5px solid var(--panel-edge); border-radius: 10px; transition: .12s; }
@@ -529,6 +543,13 @@
         <p class="label">Grout joint</p>
         <div class="chips" id="grout-chips"></div>
       </div>
+    </div>
+
+    <div class="card">
+      <p class="label">Holes &amp; penetrations <span class="hint">valve, head, spout, drain</span></p>
+      <div class="chips" id="hole-add"></div>
+      <div id="hole-list"></div>
+      <p class="field-hint">Measure to the <b>centre of the pipe</b> — across from the left edge of this surface, and up from the floor. Then the cut list tells you where the hole lands <b>on its own tile</b>, which is the number you actually mark. Sizes are starting points: cut to what the valve needs and the escutcheon covers.</p>
     </div>
 
     <div class="card">
@@ -828,7 +849,9 @@ window.TBstate = {
     fireplace: ['Fireplace', 60, 48],
     custom: ['Surface 1', 48, 48]
   };
-  function jobSurfaces(key) { var a = JOBS[key], out = []; for (var i = 0; i < a.length; i += 3) out.push({ t: a[i], w: a[i + 1], h: a[i + 2] }); return out; }
+  function jobSurfaces(key) { var a = JOBS[key], out = []; for (var i = 0; i < a.length; i += 3) out.push({ t: a[i], w: a[i + 1], h: a[i + 2], holes: [] }); return out; }
+  // seeded from trade-standard rough-in heights — starting points, meant to be corrected
+  var HOLE_KINDS = [['Valve', 4.5, 48], ['Shower head', 1.25, 78], ['Tub spout', 1.25, 28], ['Body jet', 1.25, 42], ['Drain', 4.5, null], ['Other', 1.25, 36]];
   var state = { job: 'shower', surfaces: jobSurfaces('shower'), active: 0, tile: 12, grout: 0.125, mode: null };
   function A() { return state.surfaces[state.active] || { t: 'Surface', w: 0, h: 0 }; }
 
@@ -951,7 +974,8 @@ window.TBstate = {
       wall: A().w, height: A().h, tile: tile, grout: grout, mode: active,
       surface: (/floor|pan/i.test(A().t) ? 'floor' : 'wall'),
       pattern: (window.TB && window.TB.pattern) || 'straight',
-      surfaces: state.surfaces.map(function (s) { return { w: s.w, h: s.h, type: s.t }; }),
+      holes: (A().holes || []).slice(),
+      surfaces: state.surfaces.map(function (s) { return { w: s.w, h: s.h, type: s.t, holes: (s.holes || []).slice() }; }),
       active: state.active
     };
     window.dispatchEvent(new Event('tb-change'));
@@ -1028,6 +1052,7 @@ window.TBstate = {
     document.getElementById('lbl-width').textContent = 'Width';
     document.getElementById('lbl-height').textContent = /floor|pan/i.test(a.t) ? 'Depth' : 'Height';
     document.getElementById('active-label').innerHTML = a.t + ' &middot; size';
+    renderHoles();
   }
   function renderJobs() {
     var host = document.getElementById('job-type'); host.innerHTML = '';
@@ -1059,6 +1084,46 @@ window.TBstate = {
       host.appendChild(el);
     });
   }
+  // ---- holes & penetrations (per surface) ----
+  function renderHoles() {
+    var host = document.getElementById('hole-list'), a = A();
+    if (!a.holes) a.holes = [];
+    host.innerHTML = '';
+    if (!a.holes.length) { host.innerHTML = '<p class="hole-empty">No holes on this surface yet.</p>'; return; }
+    var head = document.createElement('div');
+    head.className = 'hole-head';
+    head.innerHTML = '<span>What</span><span>From left</span><span>Up</span><span>⌀</span><span></span>';
+    host.appendChild(head);
+    a.holes.forEach(function (h, i) {
+      var row = document.createElement('div'); row.className = 'hole-row';
+      row.innerHTML = '<span class="hname">' + h.t + '</span>' +
+        '<input type="number" step="0.25" min="0" inputmode="decimal" value="' + h.x + '" aria-label="Across from left">' +
+        '<input type="number" step="0.25" min="0" inputmode="decimal" value="' + h.y + '" aria-label="Up from floor">' +
+        '<input type="number" step="0.125" min="0.125" inputmode="decimal" value="' + h.d + '" aria-label="Hole diameter">' +
+        '<button class="del" type="button" aria-label="Remove hole">×</button>';
+      var ins = row.querySelectorAll('input');
+      ins[0].addEventListener('input', function () { h.x = parseFloat(ins[0].value) || 0; render(); });
+      ins[1].addEventListener('input', function () { h.y = parseFloat(ins[1].value) || 0; render(); });
+      ins[2].addEventListener('input', function () { h.d = parseFloat(ins[2].value) || 0; render(); });
+      row.querySelector('.del').addEventListener('click', function () { a.holes.splice(i, 1); renderHoles(); render(); });
+      host.appendChild(row);
+    });
+  }
+  function renderHoleAdd() {
+    var host = document.getElementById('hole-add'); host.innerHTML = '';
+    HOLE_KINDS.forEach(function (k) {
+      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = '+ ' + k[0];
+      b.addEventListener('click', function () {
+        var a = A(); if (!a.holes) a.holes = [];
+        // a drain sits mid-surface; everything else takes its rough-in height, centred across
+        var y = k[2] === null ? Math.round(a.h / 2 * 4) / 4 : Math.min(k[2], a.h);
+        a.holes.push({ t: k[0], x: Math.round(a.w / 2 * 4) / 4, y: y, d: k[1] });
+        renderHoles(); render();
+      });
+      host.appendChild(b);
+    });
+  }
+
   document.getElementById('add-wall').addEventListener('click', function () { state.surfaces.push({ t: 'Wall ' + (state.surfaces.length + 1), w: 48, h: 84 }); state.active = state.surfaces.length - 1; state.job = 'custom'; renderJobs(); renderSurfList(); loadActive(); sync(); });
   document.getElementById('add-floor').addEventListener('click', function () { state.surfaces.push({ t: 'Floor ' + (state.surfaces.length + 1), w: 60, h: 60 }); state.active = state.surfaces.length - 1; state.job = 'custom'; renderJobs(); renderSurfList(); loadActive(); sync(); });
 
@@ -1072,7 +1137,7 @@ window.TBstate = {
   });
 
   window.addEventListener('resize', function () { render(); });
-  renderJobs(); renderSurfList(); loadActive(); sync();
+  renderHoleAdd(); renderJobs(); renderSurfList(); loadActive(); sync();
 })();
 
 /* ============ BUY LIST engine ============ */
@@ -1386,16 +1451,57 @@ window.TBstate = {
   }
 
   var doneCuts = {}, activeCut = null;
-  function keyOf(t) { return toDim(t.w) + ' × ' + toDim(t.h); }
+
+  /* Holes: a penetration is measured off the WALL, but you mark it on a TILE — so for
+     every tile the hole touches, work out where its centre sits relative to that tile's
+     own left and bottom edge. A hole straddling a joint touches 2 (or 4) tiles and
+     becomes a notch off the edge of each — centre offsets then land outside the tile,
+     which is exactly right: you measure from the edge and cut in. */
+  function annotate(tiles, holes, H) {
+    if (!holes || !holes.length) return;
+    tiles.forEach(function (t) {
+      var hits = [];
+      holes.forEach(function (h) {
+        if (!(h.d > 0)) return;
+        var cx = h.x, cy = H - h.y, r = h.d / 2;          // h.y is up-from-floor; svg y runs down
+        var nx = Math.max(t.x, Math.min(cx, t.x + t.w)), ny = Math.max(t.y, Math.min(cy, t.y + t.h));
+        if ((cx - nx) * (cx - nx) + (cy - ny) * (cy - ny) >= r * r - 1e-9) return;   // circle misses this tile
+        hits.push({ d: h.d, kind: h.t, cx: cx, cy: cy,
+          dx: cx - t.x, dy: (t.y + t.h) - cy,
+          inside: cx >= t.x - 1e-9 && cx <= t.x + t.w + 1e-9 && cy >= t.y - 1e-9 && cy <= t.y + t.h + 1e-9 });
+      });
+      if (hits.length) t.holes = hits;
+    });
+  }
+  function sizeOf(t) { return toDim(t.w) + ' × ' + toDim(t.h); }
+  function holeText(t) {
+    if (!t.holes) return '';
+    return t.holes.map(function (h) {
+      var d = '⌀' + toDim(h.d);
+      if (h.inside) return d + ' hole · ' + toDim(h.dx) + ' from left, ' + toDim(h.dy) + ' up';
+      // centre falls off the tile — say which edge it's past, not a bare minus sign
+      var parts = [];
+      if (h.dx < 0) parts.push(toDim(-h.dx) + ' past the left edge');
+      else if (h.dx > t.w) parts.push(toDim(h.dx - t.w) + ' past the right edge');
+      else parts.push(toDim(h.dx) + ' from left');
+      if (h.dy < 0) parts.push(toDim(-h.dy) + ' below the bottom edge');
+      else if (h.dy > t.h) parts.push(toDim(h.dy - t.h) + ' above the top edge');
+      else parts.push(toDim(h.dy) + ' up');
+      return d + ' notch · centre ' + parts.join(', ');
+    }).join('  +  ');
+  }
+  function keyOf(t) { var k = sizeOf(t), ht = holeText(t); return ht ? k + ' · ' + ht : k; }
   // group the cut pieces by exact size and number them 1..N (cut-by-number)
   function buildCuts(tiles, tile) {
     var order = [], groups = {};
     tiles.forEach(function (t) {
-      if (t.fullW && t.fullH) return;
+      if (t.fullW && t.fullH && !t.holes) return;
       var key = keyOf(t);
       if (!groups[key]) {
         var cat = classify(t, tile);
-        groups[key] = { num: 0, n: 0, key: key, label: (cat === 'half' ? 'half tile' : cat === 'third' ? 'third tile' : cat === 'sliver' ? 'sliver' : ''), sliver: cat === 'sliver' };
+        groups[key] = { num: 0, n: 0, key: key, size: sizeOf(t), hole: holeText(t), isHole: !!t.holes,
+          label: (cat === 'half' ? 'half tile' : cat === 'third' ? 'third tile' : cat === 'sliver' ? 'sliver' : ''),
+          sliver: cat === 'sliver' };
         order.push(key);
       }
       groups[key].n++;
@@ -1415,35 +1521,57 @@ window.TBstate = {
     bg.setAttribute('x', 0); bg.setAttribute('y', 0); bg.setAttribute('width', W); bg.setAttribute('height', H);
     bg.setAttribute('fill', 'var(--grout)'); svg.appendChild(bg);
     var gi = Math.min(grout / 2, tile * 0.06);
+    var circles = [], labels = [];
     tiles.forEach(function (t) {
-      var isCut = (!t.fullW || !t.fullH);
-      var key = isCut ? keyOf(t) : null;
+      var isPiece = (!t.fullW || !t.fullH || !!t.holes);
+      var key = isPiece ? keyOf(t) : null;
       var g = key && cuts ? cuts.groups[key] : null;
       var done = key ? !!doneCuts[key] : false, active = key && activeCut === key;
-      var sliver = isCut && g && g.sliver;
+      var sliver = isPiece && g && g.sliver;
+      var cutShape = (!t.fullW || !t.fullH);
       var rect = document.createElementNS(NS, 'rect');
       rect.setAttribute('x', (t.x + gi).toFixed(3));
       rect.setAttribute('y', (t.y + gi).toFixed(3));
       rect.setAttribute('width', Math.max(0, t.w - 2 * gi).toFixed(3));
       rect.setAttribute('height', Math.max(0, t.h - 2 * gi).toFixed(3));
       rect.setAttribute('rx', Math.min(0.6, tile * 0.05));
-      rect.setAttribute('fill', !isCut ? 'var(--tile-full)' : (done ? 'var(--tile-full-edge)' : (sliver ? 'var(--warn)' : 'var(--chalk)')));
+      rect.setAttribute('fill', !cutShape ? 'var(--tile-full)' : (done ? 'var(--tile-full-edge)' : (sliver ? 'var(--warn)' : 'var(--chalk)')));
       if (active) { rect.setAttribute('stroke', 'var(--ink)'); rect.setAttribute('stroke-width', Math.max(0.5, tile * 0.035)); }
+      else if (t.holes) { rect.setAttribute('stroke', 'var(--amber)'); rect.setAttribute('stroke-width', Math.max(0.22, tile * 0.022)); }
       if (done) rect.setAttribute('opacity', '0.55');
       svg.appendChild(rect);
-      if (isCut && g) {
+      if (t.holes) t.holes.forEach(function (h) { circles.push(h); });
+      if (isPiece && g) {
         var fs = Math.min(Math.min(t.w, t.h) * 0.5, tile * 0.42);
-        if (fs >= 2) {
-          var tx = document.createElementNS(NS, 'text');
-          tx.setAttribute('x', (t.x + t.w / 2).toFixed(2));
-          tx.setAttribute('y', (t.y + t.h / 2).toFixed(2));
-          tx.setAttribute('text-anchor', 'middle'); tx.setAttribute('dominant-baseline', 'central');
-          tx.setAttribute('font-size', fs.toFixed(1)); tx.setAttribute('font-weight', '700');
-          tx.setAttribute('fill', sliver ? '#fff' : 'var(--ground)'); tx.setAttribute('opacity', done ? '0.5' : '0.95');
-          tx.textContent = g.num;
-          svg.appendChild(tx);
-        }
+        if (fs >= 2) labels.push({ t: t, g: g, fs: fs, sliver: sliver, done: done });
       }
+    });
+    // the holes sit on top of the tile field...
+    var seen = {};
+    circles.forEach(function (h) {
+      var k = h.cx.toFixed(3) + ',' + h.cy.toFixed(3) + ',' + h.d;
+      if (seen[k]) return; seen[k] = 1;                    // straddling tiles each report the same hole
+      var c = document.createElementNS(NS, 'circle');
+      c.setAttribute('cx', h.cx.toFixed(3)); c.setAttribute('cy', h.cy.toFixed(3));
+      c.setAttribute('r', (h.d / 2).toFixed(3));
+      c.setAttribute('fill', 'var(--grout)');
+      c.setAttribute('stroke', 'var(--amber)');
+      c.setAttribute('stroke-width', Math.max(0.09, tile * 0.022).toFixed(3));
+      svg.appendChild(c);
+    });
+    // ...and the numbers on top of everything, nudged off-centre where a hole is in the way
+    labels.forEach(function (L) {
+      var cx = L.t.x + L.t.w / 2, cy = L.t.y + L.t.h / 2;
+      if (L.t.holes) { cx = L.t.x + L.t.w * 0.2; cy = L.t.y + L.t.h * 0.2; }
+      var tx = document.createElementNS(NS, 'text');
+      tx.setAttribute('x', cx.toFixed(2)); tx.setAttribute('y', cy.toFixed(2));
+      tx.setAttribute('text-anchor', 'middle'); tx.setAttribute('dominant-baseline', 'central');
+      tx.setAttribute('font-size', L.fs.toFixed(1)); tx.setAttribute('font-weight', '700');
+      tx.setAttribute('fill', L.t.holes ? 'var(--amber)' : (L.sliver ? '#fff' : 'var(--ground)'));
+      if (L.t.holes) { tx.setAttribute('stroke', 'var(--panel)'); tx.setAttribute('stroke-width', (tile * 0.03).toFixed(2)); tx.setAttribute('paint-order', 'stroke'); }
+      tx.setAttribute('opacity', L.done ? '0.5' : '0.95');
+      tx.textContent = L.g.num;
+      svg.appendChild(tx);
     });
   }
 
@@ -1476,9 +1604,10 @@ window.TBstate = {
     }
     cuts.order.forEach(function (k) {
       var g = cuts.groups[k], done = !!doneCuts[k], active = activeCut === k;
-      html += '<div class="cbnrow' + (done ? ' done' : '') + (active ? ' active' : '') + (g.sliver ? ' sliver' : '') + '" data-key="' + k + '">' +
+      var sub = g.hole ? g.hole : (g.label ? g.label + (g.sliver ? ' ⚠' : '') : '');
+      html += '<div class="cbnrow' + (done ? ' done' : '') + (active ? ' active' : '') + (g.sliver ? ' sliver' : '') + (g.isHole ? ' hole' : '') + '" data-key="' + k.replace(/"/g, '&quot;') + '">' +
         '<span class="cbn-num">' + g.num + '</span>' +
-        '<span class="cbn-mid"><span class="cbn-dim">' + k + '</span>' + (g.label ? '<span class="cbn-lbl">' + g.label + (g.sliver ? ' ⚠' : '') + '</span>' : '') + '</span>' +
+        '<span class="cbn-mid"><span class="cbn-dim">' + g.size + '</span>' + (sub ? '<span class="cbn-lbl">' + sub + '</span>' : '') + '</span>' +
         '<span class="cbn-qty">×' + g.n + '</span>' +
         '<span class="cbn-check" data-check="1" role="button" aria-label="Mark this cut done">' + (done ? '✓' : '') + '</span>' +
         '</div>';
@@ -1491,13 +1620,17 @@ window.TBstate = {
     var surfaces = T.surfaces || [], el = document.getElementById('job-total');
     if (!el) return;
     if (!surfaces.length) { el.innerHTML = ''; return; }
-    var agg = { full: 0, half: 0, third: 0, cut: 0, sliver: 0, total: 0 }, measured = 0;
+    var agg = { full: 0, half: 0, third: 0, cut: 0, sliver: 0, holes: 0, total: 0 }, measured = 0;
     surfaces.forEach(function (s) {
       if (!(s.w > 0) || !(s.h > 0)) return;
       var tiles = (pat === 'herring') ? herringbone2D(s.w, s.h, tile) : (GRID[pat] ? layout2D(s.w, s.h, tile, grout, mode, pat) : null);
       if (!tiles) return;
+      annotate(tiles, s.holes, s.h);
       measured++; agg.total += tiles.length;
-      tiles.forEach(function (t) { var c = classify(t, tile); if (agg[c] !== undefined) agg[c]++; });
+      tiles.forEach(function (t) {
+        if (t.holes) { agg.holes++; return; }              // a holed tile is its own job, not a plain cut
+        var c = classify(t, tile); if (agg[c] !== undefined) agg[c]++;
+      });
     });
     if (!measured) { el.innerHTML = '<div class="cutrow"><span class="dim">This pattern lays at an angle — per-surface counts only for now.</span></div>'; return; }
     var h = '<div class="cutrow total"><span class="k">Total tiles — whole job</span><span class="cnt">' + agg.total + '</span></div>';
@@ -1506,6 +1639,7 @@ window.TBstate = {
     if (agg.third) h += '<div class="cutrow third"><span class="k">Third</span><span class="cnt">' + agg.third + '</span></div>';
     if (agg.cut) h += '<div class="cutrow cut"><span class="k">Other cuts</span><span class="cnt">' + agg.cut + '</span></div>';
     if (agg.sliver) h += '<div class="cutrow sliver"><span class="k">Slivers</span><span class="cnt">' + agg.sliver + ' ⚠</span></div>';
+    if (agg.holes) h += '<div class="cutrow cut"><span class="k">Tiles with holes</span><span class="cnt">' + agg.holes + '</span></div>';
     el.innerHTML = h;
   }
 
@@ -1518,6 +1652,7 @@ window.TBstate = {
     if (pat === 'herring') {
       svg.style.display = 'block';
       var ht = herringbone2D(W, H, tile);
+      annotate(ht, T.holes, H);
       var hcuts = buildCuts(ht, tile);
       draw(ht, W, H, grout, tile, hcuts);
       cutlist(hcuts, tile, ht.length);
@@ -1531,6 +1666,7 @@ window.TBstate = {
     }
     svg.style.display = 'block';
     var tiles = layout2D(W, H, tile, grout, mode, pat);
+    annotate(tiles, T.holes, H);
     var cuts = buildCuts(tiles, tile);
     draw(tiles, W, H, grout, tile, cuts);
     cutlist(cuts, tile, tiles.length);
@@ -1710,6 +1846,15 @@ window.TBstate = {
       return '<tr' + (isT ? ' class="ps-total"' : '') + '><td>' + (k ? esc(k.textContent.trim()) : '') + '</td><td>' + (v ? esc(v.textContent.trim()) : '') + '</td></tr>';
     }).join('');
   }
+  // the numbered cut rows — the whole point of a cut sheet, and they were missing from it
+  function cbnRows(sel) {
+    return [].slice.call(document.querySelectorAll(sel)).map(function (r) {
+      var num = r.querySelector('.cbn-num'), dim = r.querySelector('.cbn-dim'),
+          lbl = r.querySelector('.cbn-lbl'), qty = r.querySelector('.cbn-qty');
+      return '<tr><td>' + (num ? esc(num.textContent) + '. ' : '') + (dim ? esc(dim.textContent) : '') +
+        (lbl ? ' — ' + esc(lbl.textContent) : '') + '</td><td>' + (qty ? esc(qty.textContent) : '') + '</td></tr>';
+    }).join('');
+  }
   btn.addEventListener('click', function () {
     var jobSel = document.getElementById('job-select');
     var jobName = (jobSel && jobSel.value) ? jobSel.value : 'Tile job';
@@ -1719,13 +1864,17 @@ window.TBstate = {
     var cuts = pairRows(document.querySelectorAll('#cutlist .cutrow'), '.k, .dim', '.cnt', 'total');
     var mat = pairRows(document.querySelectorAll('#buy-items .item'), '.name', '.qty');
     var quote = pairRows(document.querySelectorAll('#quote .qrow'), '.qk', '.qv', 'total');
+    var cutRows = cbnRows('#cutlist .cbnrow'), mapRows = cbnRows('#map-cutlist .cbnrow');
+    var mapTotals = pairRows(document.querySelectorAll('#map-cutlist .cutrow'), '.k, .dim', '.cnt', 'total');
     sheet.innerHTML =
       '<h1>' + esc(jobName) + '</h1>' +
       '<div class="ps-sub">Tile Buddy cut sheet · ' + esc(date) + (netArea ? ' · ' + esc(netArea) : '') + '</div>' +
       '<h2>Layout — ' + esc(surfWord) + '</h2><table>' + cuts + '</table>' +
+      (cutRows ? '<h2>Cut list — cut in this order</h2><table>' + cutRows + '</table>' : '') +
+      (mapRows ? '<h2>Room map — cut list</h2><table>' + mapTotals + mapRows + '</table>' : '') +
       '<h2>Materials to order</h2><table>' + mat + '</table>' +
       '<h2>Cost estimate</h2><table>' + quote + '</table>' +
-      '<div class="ps-foot">Consumable coverages are estimates — confirm against the bag. Cut list is for the active surface. Generated by Tile Buddy.</div>';
+      '<div class="ps-foot">Consumable coverages are estimates — confirm against the bag. Cut list is for the active surface. Hole positions are measured from each tile\'s own left and bottom edge — check them against the rough-in before you cut. Generated by Tile Buddy.</div>';
     window.print();
   });
 })();
