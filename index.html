@@ -106,6 +106,9 @@
   /* ---------- room mapper ---------- */
   .map-svg { width: 100%; display: block; border-radius: 8px; background: var(--ground); }
   .map-unit { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .unitbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: -6px; }
+  .unitbar .seg button { padding: 7px 13px; font-size: .84rem; }
+  #tile-swap { padding: 10px 12px; font-size: 1.05rem; line-height: 1; border-style: solid; }
   .map-head, .map-row { display: grid; grid-template-columns: 22px 1fr 88px 26px; gap: 6px; align-items: center; }
   .map-head { font-size: .64rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); font-weight: 600; margin: 14px 0 6px; padding: 0 2px; }
   .map-row { margin-bottom: 6px; }
@@ -534,6 +537,16 @@
     <button class="jobbtn ghost" id="job-del" type="button" title="Delete this job" hidden>Delete</button>
   </div>
 
+  <div class="unitbar">
+    <span class="pv-lbl">Measure in</span>
+    <div class="seg" id="unit-seg">
+      <button type="button" data-u="in" aria-pressed="true">inches</button>
+      <button type="button" data-u="ft" aria-pressed="false">feet</button>
+      <button type="button" data-u="cm" aria-pressed="false">cm</button>
+      <button type="button" data-u="mm" aria-pressed="false">mm</button>
+    </div>
+  </div>
+
   <!-- ============ LAYOUT ============ -->
   <section id="panel-layout" class="panel" role="tabpanel">
     <div class="card">
@@ -557,27 +570,30 @@
       <div class="field">
         <p class="label" id="lbl-width">Width</p>
         <div class="row">
-          <input type="number" id="wall" value="60" min="1" step="0.125" inputmode="decimal" aria-label="Width in inches">
-          <span class="unit">inches</span>
+          <input type="number" id="wall" value="60" min="0" step="0.125" inputmode="decimal" aria-label="Width">
+          <span class="unit unit-label">in</span>
         </div>
         <div class="chips" id="wall-chips"></div>
       </div>
       <div class="field">
         <p class="label" id="lbl-height">Height</p>
         <div class="row">
-          <input type="number" id="height" value="84" min="1" step="0.125" inputmode="decimal" aria-label="Height in inches">
-          <span class="unit">inches</span>
+          <input type="number" id="height" value="84" min="0" step="0.125" inputmode="decimal" aria-label="Height">
+          <span class="unit unit-label">in</span>
         </div>
         <div class="chips" id="height-chips"></div>
       </div>
       <div class="field">
-        <p class="label">Tile size <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-faint)">(the side running along the width)</span></p>
+        <p class="label">Tile size <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-faint)">(across × up, as it sits)</span></p>
         <div class="row">
-          <input type="text" id="tile" value="12" inputmode="decimal" autocomplete="off" aria-label="Actual tile size in inches">
-          <span class="unit">inches</span>
+          <input type="text" id="tile" value="12" inputmode="decimal" autocomplete="off" aria-label="Tile width">
+          <span class="unit">&times;</span>
+          <input type="text" id="tile-h" value="12" inputmode="decimal" autocomplete="off" aria-label="Tile height">
+          <span class="unit unit-label">in</span>
+          <button class="btn-ghost" id="tile-swap" type="button" title="Turn the tile 90°" aria-label="Turn the tile 90 degrees">&#8635;</button>
         </div>
         <div class="chips" id="tile-chips"></div>
-        <p class="field-hint">Type the <b>real measured size</b> — a &ldquo;12&Prime;&rdquo; tile is often 11 7/8 or 11 3/4. Fractions work: <span class="mono">11 7/8</span>.</p>
+        <p class="field-hint">Type the <b>real measured size</b> — a &ldquo;12&Prime;&rdquo; tile is often 11 7/8 or 11 3/4. Fractions work: <span class="mono">11 7/8</span>. For planks (12&times;24, 6&times;24) set both, and <b>&#8635;</b> turns it 90&deg;.</p>
       </div>
       <div class="field">
         <p class="label">Grout joint</p>
@@ -609,7 +625,7 @@
       <div class="trim-row" id="trim-wrap">
         <label class="pv-lbl" for="trim-w">Width</label>
         <input type="number" id="trim-w" step="0.0625" min="0" inputmode="decimal" value="0.375">
-        <span class="unit">inches</span>
+        <span class="unit unit-label">in</span>
       </div>
       <div id="trim-report" class="trim-report"></div>
       <p class="field-hint">Trim takes its width off the field <b>before</b> the first tile goes down, so the layout re-centres inside what's left. That's why it's an early call, not a finishing one.</p>
@@ -731,13 +747,6 @@
     <div class="card">
       <p class="label">Walk the walls <span class="hint">start in a corner, go around</span></p>
       <div class="chips" id="map-presets"></div>
-      <div class="map-unit">
-        <span class="pv-lbl">Lengths in</span>
-        <div class="seg" id="map-unit">
-          <button type="button" data-u="ft" aria-pressed="true">feet</button>
-          <button type="button" data-u="in" aria-pressed="false">inches</button>
-        </div>
-      </div>
       <div class="map-head"><span>#</span><span>Which way</span><span>How far</span><span></span></div>
       <div id="map-segs"></div>
       <div class="addrow">
@@ -751,7 +760,7 @@
       <p class="label">The floor <span class="hint">your real outline, tiled</span></p>
       <svg class="map-svg" id="map-svg" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
       <div class="map-stats">
-        <div class="map-stat"><div class="num" id="map-area">—</div><div class="cap">sq ft</div></div>
+        <div class="map-stat"><div class="num" id="map-area">—</div><div class="cap area-label">sq ft</div></div>
         <div class="map-stat"><div class="num" id="map-full">—</div><div class="cap">Full tiles</div></div>
         <div class="map-stat"><div class="num" id="map-cuts">—</div><div class="cap">Cuts</div></div>
       </div>
@@ -774,9 +783,9 @@
   <!-- ============ BUY LIST ============ -->
   <section id="panel-buy" class="panel" role="tabpanel" hidden>
     <div class="card">
-      <p class="label">Surfaces <span class="hint">width × height, in inches</span></p>
+      <p class="label">Surfaces <span class="hint">width × height</span></p>
       <div class="surf-head">
-        <span>Surface</span><span style="text-align:center">W</span><span></span><span style="text-align:center">H</span><span style="text-align:right">sq ft</span><span></span>
+        <span>Surface</span><span style="text-align:center">W</span><span></span><span style="text-align:center">H</span><span style="text-align:right" class="area-label">sq ft</span><span></span>
       </div>
       <div id="surfaces"></div>
       <div class="addrow">
@@ -871,6 +880,92 @@
 <div id="print-sheet" aria-hidden="true"></div>
 
 <script>
+/* ============ units — one source of truth ============
+   Everything is stored in INCHES. This layer only decides how a number is
+   shown and how a typed number is read back. Imperial keeps sixteenths
+   (that's what a tape reads); metric gets decimals, because "3/16 cm" is
+   not a thing anyone says. */
+window.TBU = (function () {
+  var U = { u: 'in' };
+  var MARK = { in: '″', ft: '″', cm: ' cm', mm: ' mm' };
+  function frac(x) {          // inches → 11 3/4″ style
+    var neg = x < 0; x = Math.abs(x);
+    var whole = Math.floor(x + 1e-9), f = x - whole, six = Math.round(f * 16);
+    if (six === 16) { whole += 1; six = 0; }
+    var num = six, den = 16;
+    while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; }
+    var s = '';
+    if (whole > 0) s += whole;
+    if (num > 0) s += (whole > 0 ? ' ' : '') + num + '/' + den;
+    if (s === '') s = '0';
+    return (neg ? '-' : '') + s;
+  }
+  U.label = function () { return { in: 'in', ft: 'ft', cm: 'cm', mm: 'mm' }[U.u]; };
+  U.metric = function () { return U.u === 'cm' || U.u === 'mm'; };
+  U.fromIn = function (x) { return U.u === 'cm' ? x * 2.54 : U.u === 'mm' ? x * 25.4 : U.u === 'ft' ? x / 12 : x; };
+  U.toIn = function (v) { return U.u === 'cm' ? v / 2.54 : U.u === 'mm' ? v / 25.4 : U.u === 'ft' ? v * 12 : v; };
+  // display WITH the unit mark
+  U.fmt = function (x) {
+    if (U.u === 'cm') return (Math.round(x * 2.54 * 10) / 10) + ' cm';
+    if (U.u === 'mm') return Math.round(x * 25.4) + ' mm';
+    if (U.u === 'ft') {                       // feet + inches, the way a run gets called out
+      var neg = x < 0; x = Math.abs(x);
+      var ft = Math.floor(x / 12 + 1e-9), rem = x - ft * 12;
+      var r = frac(rem);
+      var s = ft > 0 ? ft + '′' + (r !== '0' ? ' ' + r + '″' : '') : r + '″';
+      return (neg ? '-' : '') + s;
+    }
+    return frac(x) + '″';
+  };
+  // number only, for input fields
+  U.num = function (x) {
+    if (U.u === 'cm') return Math.round(x * 2.54 * 100) / 100;
+    if (U.u === 'mm') return Math.round(x * 25.4 * 10) / 10;
+    if (U.u === 'ft') return Math.round(x / 12 * 1000) / 1000;
+    return Math.round(x * 10000) / 10000;
+  };
+  U.numStr = function (x) { return U.metric() || U.u === 'ft' ? String(U.num(x)) : frac(x); };
+  // parse a typed value in the CURRENT unit → inches. Handles 11 7/8, 11-7/8, 7/8, 11.875, 5'6"
+  U.parse = function (str) {
+    if (str == null) return NaN;
+    var s = String(str).trim().toLowerCase().replace(/[″"]/g, '"').replace(/[′']/g, "'");
+    if (!s) return NaN;
+    if (!U.metric()) {
+      var fm = s.match(/^\s*(-?[\d.]+)\s*'\s*(.*)$/);      // 5' 6 1/2"
+      if (fm) {
+        var ft = parseFloat(fm[1]) || 0, restIn = fm[2] ? plainIn(fm[2]) : 0;
+        return ft * 12 + (isNaN(restIn) ? 0 : restIn);
+      }
+    }
+    var v = plainIn(s);
+    return isNaN(v) ? NaN : U.toIn(v);
+  };
+  function plainIn(s) {                                    // mixed number in whatever unit
+    s = s.replace(/["']/g, '').replace(/(cm|mm|in|ft)\b/g, '').replace(/-/g, ' ').trim();
+    if (!s) return NaN;
+    var parts = s.split(/\s+/), total = 0, ok = false;
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (p.indexOf('/') >= 0) { var f = p.split('/'), n = parseFloat(f[0]), d = parseFloat(f[1]); if (d) { total += n / d; ok = true; } }
+      else { var x = parseFloat(p); if (!isNaN(x)) { total += x; ok = true; } }
+    }
+    return ok ? total : NaN;
+  }
+  U.area = function (sqin) {   // sq ft, or m² once you're in metric
+    return U.metric() ? (Math.round(sqin * 0.00064516 * 100) / 100) + ' m²' : (Math.round(sqin / 144 * 10) / 10) + ' sq ft';
+  };
+  U.areaLabel = function () { return U.metric() ? 'm²' : 'sq ft'; };
+  U.set = function (u) {
+    if (!MARK[u]) return;
+    U.u = u;
+    try { localStorage.setItem('tilebuddy.units', u); } catch (e) {}
+    document.querySelectorAll('.unit-label').forEach(function (el) { el.textContent = U.label(); });
+    window.dispatchEvent(new Event('tb-units'));
+  };
+  try { var sv = localStorage.getItem('tilebuddy.units'); if (sv && MARK[sv]) U.u = sv; } catch (e) {}
+  return U;
+})();
+
 /* ============ job save/restore registry ============ */
 window.TBstate = {
   slots: {}, order: [],
@@ -927,35 +1022,12 @@ window.TBstate = {
   var NICHE_KINDS = [['Shampoo niche', 14, 14, 48, 3.5], ['Soap niche', 12, 6, 24, 3.5], ['Custom niche', 12, 12, 40, 3.5]];
   // seeded from trade-standard rough-in heights — starting points, meant to be corrected
   var HOLE_KINDS = [['Valve', 4.5, 48], ['Shower head', 1.25, 78], ['Tub spout', 1.25, 28], ['Body jet', 1.25, 42], ['Drain', 4.5, null], ['Other', 1.25, 36]];
-  var state = { job: 'shower', surfaces: jobSurfaces('shower'), active: 0, tile: 12, grout: 0.125, mode: null };
+  var state = { job: 'shower', surfaces: jobSurfaces('shower'), active: 0, tw: 12, th: 12, grout: 0.125, mode: null };
   function A() { return state.surfaces[state.active] || { t: 'Surface', w: 0, h: 0 }; }
 
-  function toDim(x) {
-    var neg = x < 0; x = Math.abs(x);
-    var whole = Math.floor(x + 1e-9), frac = x - whole, six = Math.round(frac * 16);
-    if (six === 16) { whole += 1; six = 0; }
-    var num = six, den = 16;
-    while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; }
-    var s = '';
-    if (whole > 0) s += whole;
-    if (num > 0) s += (whole > 0 ? ' ' : '') + num + '/' + den;
-    if (s === '') s = '0';
-    return (neg ? '-' : '') + s + '″';
-  }
-  function fmtFrac(n) { return toDim(n).replace('″', ''); }
-  // parse "11 7/8", "11-7/8", "7/8", "11.875", "11" → number of inches
-  function parseFrac(str) {
-    if (str == null) return NaN;
-    var s = String(str).trim().replace(/["″]|in\b/gi, '').replace(/-/g, ' ').trim();
-    if (!s) return NaN;
-    var parts = s.split(/\s+/), total = 0, ok = false;
-    for (var i = 0; i < parts.length; i++) {
-      var p = parts[i];
-      if (p.indexOf('/') >= 0) { var f = p.split('/'), num = parseFloat(f[0]), den = parseFloat(f[1]); if (den) { total += num / den; ok = true; } }
-      else { var v = parseFloat(p); if (!isNaN(v)) { total += v; ok = true; } }
-    }
-    return ok ? total : NaN;
-  }
+  function toDim(x) { return window.TBU.fmt(x); }
+  function fmtFrac(n) { return window.TBU.numStr(n); }
+  function parseFrac(str) { return window.TBU.parse(str); }
 
   function build(W, tile, grout, mode) {
     var mod = tile + grout, anchor;
@@ -984,7 +1056,7 @@ window.TBstate = {
   function recommend(results) { return results.tile.score >= results.joint.score ? 'tile' : 'joint'; }
 
   function render() {
-    var W = A().w, tile = state.tile, grout = state.grout;
+    var W = A().w, tile = state.tw, grout = state.grout;
     if (!(W > 0) || !(tile > 0)) return;
     var results = { tile: build(W, tile, grout, 'tile'), joint: build(W, tile, grout, 'joint'), left: build(W, tile, grout, 'left') };
     var rec = recommend(results), active = state.mode || rec, r = results[active];
@@ -1046,7 +1118,7 @@ window.TBstate = {
     document.getElementById('s-total').textContent = r.tiles.length;
 
     window.TB = {
-      wall: A().w, height: A().h, tile: tile, grout: grout, mode: active,
+      wall: A().w, height: A().h, tile: state.tw, tw: state.tw, th: state.th, grout: grout, mode: active,
       surface: (/floor|pan/i.test(A().t) ? 'floor' : 'wall'),
       pattern: (window.TB && window.TB.pattern) || 'straight',
       holes: (A().holes || []).slice(),
@@ -1099,36 +1171,54 @@ window.TBstate = {
     });
   }
   function refreshChips() {
-    makeChips('wall-chips', [30, 32, 36, 48, 60], function (v) { return v + '″'; },
-      function (v) { A().w = v; document.getElementById('wall').value = v; state.mode = null; sync(); },
+    var U = window.TBU;
+    makeChips('wall-chips', [30, 32, 36, 48, 60], function (v) { return U.fmt(v); },
+      function (v) { A().w = v; document.getElementById('wall').value = U.num(v); state.mode = null; renderSurfList(); sync(); },
       function (v) { return Math.abs(A().w - v) < .001; });
-    makeChips('height-chips', [48, 60, 72, 84, 96], function (v) { return v + '″'; },
-      function (v) { A().h = v; document.getElementById('height').value = v; renderSurfList(); sync(); },
+    makeChips('height-chips', [48, 60, 72, 84, 96], function (v) { return U.fmt(v); },
+      function (v) { A().h = v; document.getElementById('height').value = U.num(v); renderSurfList(); sync(); },
       function (v) { return Math.abs(A().h - v) < .001; });
-    makeChips('tile-chips', [3, 4, 6, 12, 24], function (v) { return v + '″'; },
-      function (v) { state.tile = v; document.getElementById('tile').value = fmtFrac(v); state.mode = null; sync(); },
-      function (v) { return Math.abs(state.tile - v) < .001; });
+    // squares AND planks — 12×24 is the most-sold tile there is
+    makeChips('tile-chips', [[3, 6], [4, 4], [6, 6], [12, 12], [6, 24], [12, 24], [24, 24]],
+      function (v) { return U.metric() ? U.num(v[0]) + '×' + U.num(v[1]) : v[0] + '×' + v[1] + '″'; },
+      function (v) { state.tw = v[0]; state.th = v[1]; showTile(); state.mode = null; sync(); },
+      function (v) { return Math.abs(state.tw - v[0]) < .001 && Math.abs(state.th - v[1]) < .001; });
     makeChips('grout-chips', [0.0625, 0.125, 0.1875, 0.25],
-      function (v) { return ({ '0.0625': '1/16″', '0.125': '1/8″', '0.1875': '3/16″', '0.25': '1/4″' })[v]; },
+      function (v) { return U.metric() ? U.fmt(v) : ({ '0.0625': '1/16″', '0.125': '1/8″', '0.1875': '3/16″', '0.25': '1/4″' })[v]; },
       function (v) { state.grout = v; state.mode = null; sync(); },
       function (v) { return Math.abs(state.grout - v) < .0001; });
   }
+  function showTile() {
+    document.getElementById('tile').value = fmtFrac(state.tw);
+    document.getElementById('tile-h').value = fmtFrac(state.th);
+  }
+  function showSize() {
+    var U = window.TBU, a = A();
+    document.getElementById('wall').value = U.num(a.w);
+    document.getElementById('height').value = U.num(a.h);
+  }
   function sync() { refreshChips(); render(); }
 
-  document.getElementById('wall').addEventListener('input', function (e) { A().w = parseFloat(e.target.value) || 0; state.mode = null; renderSurfList(); sync(); });
-  document.getElementById('height').addEventListener('input', function (e) { A().h = parseFloat(e.target.value) || 0; renderSurfList(); sync(); });
+  document.getElementById('wall').addEventListener('input', function (e) { A().w = window.TBU.toIn(parseFloat(e.target.value) || 0); state.mode = null; renderSurfList(); sync(); });
+  document.getElementById('height').addEventListener('input', function (e) { A().h = window.TBU.toIn(parseFloat(e.target.value) || 0); renderSurfList(); sync(); });
   (function () {
-    var tileEl = document.getElementById('tile');
-    tileEl.addEventListener('input', function (e) { var v = parseFrac(e.target.value); if (v > 0) { state.tile = v; state.mode = null; sync(); } });
-    tileEl.addEventListener('blur', function () { if (state.tile > 0) tileEl.value = fmtFrac(state.tile); });
+    var tw = document.getElementById('tile'), th = document.getElementById('tile-h');
+    tw.addEventListener('input', function (e) { var v = parseFrac(e.target.value); if (v > 0) { state.tw = v; state.mode = null; sync(); } });
+    th.addEventListener('input', function (e) { var v = parseFrac(e.target.value); if (v > 0) { state.th = v; state.mode = null; sync(); } });
+    tw.addEventListener('blur', function () { if (state.tw > 0) tw.value = fmtFrac(state.tw); });
+    th.addEventListener('blur', function () { if (state.th > 0) th.value = fmtFrac(state.th); });
+    document.getElementById('tile-swap').addEventListener('click', function () {
+      var t = state.tw; state.tw = state.th; state.th = t; showTile(); state.mode = null; sync();
+    });
   })();
+  // a unit switch changes nothing about the job — only how it reads
+  window.addEventListener('tb-units', function () { showSize(); showTile(); renderSurfList(); renderHoles(); renderNiches(); renderTrim(); renderBands(); sync(); });
 
   // ---- job type + surfaces list ----
   var JOB_LABELS = [['shower', 'Shower'], ['floor', 'Floor'], ['backsplash', 'Backsplash'], ['fireplace', 'Fireplace'], ['custom', 'Custom']];
   function loadActive() {
     var a = A();
-    document.getElementById('wall').value = a.w;
-    document.getElementById('height').value = a.h;
+    showSize();
     document.getElementById('lbl-width').textContent = 'Width';
     document.getElementById('lbl-height').textContent = /floor|pan/i.test(a.t) ? 'Depth' : 'Height';
     document.getElementById('active-label').innerHTML = a.t + ' &middot; size';
@@ -1153,7 +1243,7 @@ window.TBstate = {
     state.surfaces.forEach(function (s, i) {
       var el = document.createElement('button'); el.type = 'button'; el.className = 'surf-item' + (i === state.active ? ' active' : ''); el.dataset.i = i;
       var del = state.surfaces.length > 1 ? '<span class="si-del" data-del="' + i + '">×</span>' : '';
-      el.innerHTML = '<span class="si-dot"></span><span class="si-name">' + s.t + '</span><span class="si-dim mono">' + s.w + ' × ' + s.h + '</span>' + del;
+      el.innerHTML = '<span class="si-dot"></span><span class="si-name">' + s.t + '</span><span class="si-dim mono">' + window.TBU.numStr(s.w) + ' × ' + window.TBU.numStr(s.h) + '</span>' + del;
       el.addEventListener('click', function (ev) {
         if (ev.target && ev.target.dataset && ev.target.dataset.del !== undefined) {
           ev.stopPropagation();
@@ -1168,7 +1258,7 @@ window.TBstate = {
   }
   // ---- holes & penetrations (per surface) ----
   function renderHoles() {
-    var host = document.getElementById('hole-list'), a = A();
+    var host = document.getElementById('hole-list'), a = A(), U = window.TBU;
     if (!a.holes) a.holes = [];
     host.innerHTML = '';
     if (!a.holes.length) { host.innerHTML = '<p class="hole-empty">No holes on this surface yet.</p>'; return; }
@@ -1179,14 +1269,14 @@ window.TBstate = {
     a.holes.forEach(function (h, i) {
       var row = document.createElement('div'); row.className = 'hole-row';
       row.innerHTML = '<span class="hname">' + h.t + '</span>' +
-        '<input type="number" step="0.25" min="0" inputmode="decimal" value="' + h.x + '" aria-label="Across from left">' +
-        '<input type="number" step="0.25" min="0" inputmode="decimal" value="' + h.y + '" aria-label="Up from floor">' +
-        '<input type="number" step="0.125" min="0.125" inputmode="decimal" value="' + h.d + '" aria-label="Hole diameter">' +
+        '<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(h.x) + '" aria-label="Across from left">' +
+        '<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(h.y) + '" aria-label="Up from floor">' +
+        '<input type="number" step="0.125" min="0" inputmode="decimal" value="' + U.num(h.d) + '" aria-label="Hole diameter">' +
         '<button class="del" type="button" aria-label="Remove hole">×</button>';
       var ins = row.querySelectorAll('input');
-      ins[0].addEventListener('input', function () { h.x = parseFloat(ins[0].value) || 0; render(); });
-      ins[1].addEventListener('input', function () { h.y = parseFloat(ins[1].value) || 0; render(); });
-      ins[2].addEventListener('input', function () { h.d = parseFloat(ins[2].value) || 0; render(); });
+      ins[0].addEventListener('input', function () { h.x = U.toIn(parseFloat(ins[0].value) || 0); render(); });
+      ins[1].addEventListener('input', function () { h.y = U.toIn(parseFloat(ins[1].value) || 0); render(); });
+      ins[2].addEventListener('input', function () { h.d = U.toIn(parseFloat(ins[2].value) || 0); render(); });
       row.querySelector('.del').addEventListener('click', function () { a.holes.splice(i, 1); renderHoles(); render(); });
       host.appendChild(row);
     });
@@ -1231,14 +1321,14 @@ window.TBstate = {
   // whichever surface happened to be active last, or the badge lies after a job reload
   function currentMode() {
     if (state.mode) return state.mode;
-    var W = A().w, tile = state.tile, grout = state.grout;
+    var W = A().w, tile = state.tw, grout = state.grout;
     if (!(W > 0) || !(tile > 0)) return 'tile';
     return recommend({ tile: build(W, tile, grout, 'tile'), joint: build(W, tile, grout, 'joint') });
   }
   function nicheAlign(n) {
     var a = A(), t = trimIn2(a.trim);
-    var jx = jointsX(t.l, a.w - t.r, state.tile, state.grout, currentMode());
-    var jy = jointsY(a.h, state.tile, state.grout, t.b, a.bands);
+    var jx = jointsX(t.l, a.w - t.r, state.tw, state.grout, currentMode());
+    var jy = jointsY(a.h, state.th, state.grout, t.b, a.bands);
     return { l: nearest(n.x, jx), r: nearest(n.x + n.w, jx), b: nearest(n.y, jy), t: nearest(n.y + n.h, jy) };
   }
   var nicheItems = [];
@@ -1267,7 +1357,7 @@ window.TBstate = {
       if (R > L) { n.x = Math.round(L * 16) / 16; n.w = Math.round((R - L) * 16) / 16; }
       if (T2 > B) { n.y = Math.round(B * 16) / 16; n.h = Math.round((T2 - B) * 16) / 16; }
       var ins = box.querySelectorAll('.niche-grid input');
-      ['x', 'y', 'w', 'h', 'd'].forEach(function (k, j) { ins[j].value = n[k]; });
+      ['x', 'y', 'w', 'h', 'd'].forEach(function (k, j) { ins[j].value = window.TBU.num(n[k]); });
       refreshNiche(box, n); render();
     });
   }
@@ -1275,6 +1365,7 @@ window.TBstate = {
   function renderNiches() {
     var host = document.getElementById('niche-list'), a = A();
     if (!a.niches) a.niches = [];
+    var U = window.TBU;
     host.innerHTML = ''; nicheItems = [];
     if (!a.niches.length) { host.innerHTML = '<p class="niche-empty">No niches on this surface yet.</p>'; return; }
     a.niches.forEach(function (n, i) {
@@ -1282,15 +1373,15 @@ window.TBstate = {
       box.innerHTML =
         '<div class="niche-top"><span class="hname">' + n.t + '</span><button class="del" type="button" aria-label="Remove niche">×</button></div>' +
         '<div class="niche-grid">' +
-        '<label>From left<input type="number" step="0.25" min="0" inputmode="decimal" value="' + n.x + '"></label>' +
-        '<label>Up<input type="number" step="0.25" min="0" inputmode="decimal" value="' + n.y + '"></label>' +
-        '<label>Wide<input type="number" step="0.25" min="1" inputmode="decimal" value="' + n.w + '"></label>' +
-        '<label>Tall<input type="number" step="0.25" min="1" inputmode="decimal" value="' + n.h + '"></label>' +
-        '<label>Deep<input type="number" step="0.25" min="0.5" inputmode="decimal" value="' + n.d + '"></label>' +
+        '<label>From left<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(n.x) + '"></label>' +
+        '<label>Up<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(n.y) + '"></label>' +
+        '<label>Wide<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(n.w) + '"></label>' +
+        '<label>Tall<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(n.h) + '"></label>' +
+        '<label>Deep<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(n.d) + '"></label>' +
         '</div><div class="niche-align"></div><div class="niche-trim"></div>';
       var ins = box.querySelectorAll('.niche-grid input');
       ['x', 'y', 'w', 'h', 'd'].forEach(function (k, j) {
-        ins[j].addEventListener('input', function () { n[k] = parseFloat(ins[j].value) || 0; refreshNiche(box, n); render(); });
+        ins[j].addEventListener('input', function () { n[k] = window.TBU.toIn(parseFloat(ins[j].value) || 0); refreshNiche(box, n); render(); });
       });
       box.querySelector('.del').addEventListener('click', function () { a.niches.splice(i, 1); renderNiches(); render(); });
       host.appendChild(box);
@@ -1336,23 +1427,23 @@ window.TBstate = {
       });
       eh.appendChild(b);
     });
-    document.getElementById('trim-w').value = tr.w;
+    document.getElementById('trim-w').value = window.TBU.num(tr.w);
     var on = ['l', 'r', 't', 'b'].filter(function (k) { return tr[k]; });
     var rep = document.getElementById('trim-report');
     if (!on.length || !(tr.w > 0)) { rep.innerHTML = '<span class="muted">No trim — the field runs wall to wall.</span>'; return; }
     var lin = (tr.l ? a.h : 0) + (tr.r ? a.h : 0) + (tr.t ? a.w : 0) + (tr.b ? a.w : 0);
     var fw = a.w - (tr.l ? tr.w : 0) - (tr.r ? tr.w : 0), fh = a.h - (tr.t ? tr.w : 0) - (tr.b ? tr.w : 0);
-    var pieceLen = tr.type === 'bullnose' ? (state.tile || 12) : 96;   // profiles come in 8 ft sticks
+    var pieceLen = tr.type === 'bullnose' ? (Math.max(state.tw, state.th) || 12) : 96;   // profiles come in 8 ft sticks
     rep.innerHTML = 'Field is now <b>' + fmtFrac(fw) + '″ × ' + fmtFrac(fh) + '″</b> — the layout re-centres in that. ' +
       'Trim run <b>' + fmtFrac(lin) + '″</b> (' + (lin / 12).toFixed(1) + ' ft) → <b>' + Math.ceil(lin / pieceLen) + '</b> ' +
       (tr.type === 'bullnose' ? 'bullnose piece' + (Math.ceil(lin / pieceLen) === 1 ? '' : 's') + ' at ' + fmtFrac(pieceLen) + '″'
                               : 'stick' + (Math.ceil(lin / pieceLen) === 1 ? '' : 's') + ' at 8 ft') + '.';
   }
-  document.getElementById('trim-w').addEventListener('input', function (e) { trimOf().w = parseFloat(e.target.value) || 0; renderTrim(); render(); });
+  document.getElementById('trim-w').addEventListener('input', function (e) { trimOf().w = window.TBU.toIn(parseFloat(e.target.value) || 0); renderTrim(); render(); });
 
   /* ---- accent bands ---- */
   function renderBands() {
-    var host = document.getElementById('band-list'), a = A();
+    var host = document.getElementById('band-list'), a = A(), U = window.TBU;
     if (!a.bands) a.bands = [];
     host.innerHTML = '';
     if (!a.bands.length) { host.innerHTML = '<p class="niche-empty">No bands on this surface yet.</p>'; return; }
@@ -1361,13 +1452,13 @@ window.TBstate = {
       box.innerHTML =
         '<div class="niche-top"><span class="hname">' + b.t + '</span><button class="del" type="button" aria-label="Remove band">×</button></div>' +
         '<div class="band-grid">' +
-        '<label>Up from floor<input type="number" step="0.25" min="0" inputmode="decimal" value="' + b.y + '"></label>' +
-        '<label>Band height<input type="number" step="0.25" min="0.25" inputmode="decimal" value="' + b.h + '"></label>' +
-        '<label>Piece width<input type="number" step="0.25" min="0.25" inputmode="decimal" value="' + b.tw + '"></label>' +
+        '<label>Up from floor<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(b.y) + '"></label>' +
+        '<label>Band height<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(b.h) + '"></label>' +
+        '<label>Piece width<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(b.tw) + '"></label>' +
         '</div><div class="band-note"></div>';
       var ins = box.querySelectorAll('.band-grid input');
       ['y', 'h', 'tw'].forEach(function (k, j) {
-        ins[j].addEventListener('input', function () { b[k] = parseFloat(ins[j].value) || 0; bandNote(box, b); render(); });
+        ins[j].addEventListener('input', function () { b[k] = window.TBU.toIn(parseFloat(ins[j].value) || 0); bandNote(box, b); render(); });
       });
       box.querySelector('.del').addEventListener('click', function () { a.bands.splice(i, 1); renderBands(); render(); });
       host.appendChild(box); bandNote(box, b);
@@ -1407,16 +1498,33 @@ window.TBstate = {
   });
 
   window.TBstate.register('layout', function () {
-    return { job: state.job, surfaces: JSON.parse(JSON.stringify(state.surfaces)), active: state.active, tile: state.tile, grout: state.grout, mode: state.mode };
+    return { job: state.job, surfaces: JSON.parse(JSON.stringify(state.surfaces)), active: state.active, tw: state.tw, th: state.th, grout: state.grout, mode: state.mode };
   }, function (v) {
     state.job = v.job; state.surfaces = v.surfaces; state.active = v.active || 0;
-    state.tile = v.tile; state.grout = v.grout; state.mode = v.mode;
-    document.getElementById('tile').value = fmtFrac(v.tile);
+    state.tw = v.tw !== undefined ? v.tw : (v.tile || 12);      // jobs saved before planks existed
+    state.th = v.th !== undefined ? v.th : (v.tile || 12);
+    state.grout = v.grout; state.mode = v.mode;
+    showTile();
     renderJobs(); renderSurfList(); loadActive(); sync();
   });
 
   window.addEventListener('resize', function () { render(); });
+  showTile();
   renderHoleAdd(); renderNicheAdd(); renderBandAdd(); renderJobs(); renderSurfList(); loadActive(); sync();
+})();
+
+/* ============ units selector ============ */
+(function () {
+  var seg = document.getElementById('unit-seg');
+  if (!seg) return;
+  function paint() {
+    seg.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.u === window.TBU.u ? 'true' : 'false'); });
+    document.querySelectorAll('.unit-label').forEach(function (el) { el.textContent = window.TBU.label(); });
+  }
+  seg.querySelectorAll('button').forEach(function (b) {
+    b.addEventListener('click', function () { window.TBU.set(b.dataset.u); paint(); });
+  });
+  paint();
 })();
 
 /* ============ BUY LIST engine ============ */
@@ -1458,15 +1566,15 @@ window.TBstate = {
       var area = sqft(s);
       row.innerHTML =
         '<select aria-label="Surface type">' + opts + '</select>' +
-        '<input type="number" value="' + s.w + '" min="0" step="0.5" inputmode="decimal" aria-label="Width">' +
+        '<input type="number" value="' + window.TBU.num(s.w) + '" min="0" step="0.5" inputmode="decimal" aria-label="Width">' +
         '<span class="times">×</span>' +
-        '<input type="number" value="' + s.h + '" min="0" step="0.5" inputmode="decimal" aria-label="Height">' +
-        '<span class="sqft">' + (s.sub ? '−' : '') + (area ? area.toFixed(1) : '0') + '</span>' +
+        '<input type="number" value="' + window.TBU.num(s.h) + '" min="0" step="0.5" inputmode="decimal" aria-label="Height">' +
+        '<span class="sqft">' + (s.sub ? '−' : '') + (area ? (window.TBU.metric() ? (area * 0.092903).toFixed(2) : area.toFixed(1)) : '0') + '</span>' +
         '<button class="del" title="Remove" aria-label="Remove surface">×</button>';
       var sel = row.querySelector('select'), ins = row.querySelectorAll('input');
       sel.addEventListener('change', function () { s.type = sel.value; compute(); });
-      ins[0].addEventListener('input', function () { s.w = parseFloat(ins[0].value) || 0; renderSurfaces(); compute(); });
-      ins[1].addEventListener('input', function () { s.h = parseFloat(ins[1].value) || 0; renderSurfaces(); compute(); });
+      ins[0].addEventListener('input', function () { s.w = window.TBU.toIn(parseFloat(ins[0].value) || 0); renderSurfaces(); compute(); });
+      ins[1].addEventListener('input', function () { s.h = window.TBU.toIn(parseFloat(ins[1].value) || 0); renderSurfaces(); compute(); });
       row.querySelector('.del').addEventListener('click', function () { state.surfaces.splice(i, 1); renderSurfaces(); compute(); });
       host.appendChild(row);
     });
@@ -1489,7 +1597,8 @@ window.TBstate = {
 
   function compute() {
     var net = netArea(), withWaste = net * (1 + state.waste / 100);
-    document.getElementById('net-area').textContent = net.toFixed(1) + ' sq ft';
+    document.getElementById('net-area').textContent = window.TBU.metric()
+      ? (net * 0.092903).toFixed(2) + ' m²' : net.toFixed(1) + ' sq ft';
     var boxes = state.boxCov > 0 ? Math.ceil(withWaste / state.boxCov) : 0;
     var thin = state.thinCov > 0 ? Math.ceil(net / state.thinCov) : 0;
     var grout = state.groutCov > 0 ? Math.ceil(net / state.groutCov) : 0;
@@ -1557,6 +1666,10 @@ window.TBstate = {
     renderSurfaces(); renderPatterns(); compute();
   });
 
+  window.addEventListener('tb-units', function () {
+    document.querySelectorAll('.area-label').forEach(function (el) { el.textContent = window.TBU.areaLabel(); });
+    renderSurfaces(); compute();
+  });
   renderSurfaces(); renderPatterns(); compute();
 })();
 
@@ -1616,6 +1729,26 @@ window.TBstate = {
     return m;
   }
 
+  function hexP() {
+    var m = '', R = 7.2, stepX = R * Math.sqrt(3), stepY = 1.5 * R;
+    for (var r = -1; r < 6; r++) for (var c = -1; c < 6; c++) {
+      var cx = c * stepX + ((r % 2 + 2) % 2 ? stepX / 2 : 0), cy = r * stepY, pts = [];
+      for (var i = 0; i < 6; i++) { var a = Math.PI / 180 * (90 + 60 * i); pts.push((cx + (R - .6) * Math.cos(a)).toFixed(1) + ',' + (cy - (R - .6) * Math.sin(a)).toFixed(1)); }
+      m += '<polygon class="pat-tile" points="' + pts.join(' ') + '"/>';
+    }
+    return m;
+  }
+  function sheetP() {
+    var m = '', S = 24;
+    for (var r = 0; r < 2; r++) for (var c = 0; c < 2; c++) {
+      var ox = c * S, oy = r * S;
+      m += '<rect class="pat-tile" x="' + (ox + 1) + '" y="' + (oy + 1) + '" width="' + (S - 2) + '" height="' + (S - 2) + '" rx="1.5"/>';
+      for (var i = 0; i < 4; i++) for (var j = 0; j < 4; j++)
+        m += '<circle cx="' + (ox + 3.6 + i * 5.6) + '" cy="' + (oy + 3.6 + j * 5.6) + '" r="2.1" fill="var(--grout)" opacity=".5"/>';
+    }
+    return m;
+  }
+
   var PATS = [
     { id: 'straight', name: 'Straight', waste: 10, desc: 'Tiles line up in a clean grid — the classic, and the least waste.', draw: function () { return gridP(3, 'straight'); } },
     { id: 'brick', name: 'Running bond', waste: 10, desc: 'Each row shifts half a tile — the standard brick offset. Hides a little lippage.', draw: function () { return gridP(3, 'brick'); } },
@@ -1624,7 +1757,9 @@ window.TBstate = {
     { id: 'herring', name: 'Herringbone', waste: 18, desc: 'Planks interlock at 90° in a zigzag. All angled cuts — the priciest to set.', draw: herringP },
     { id: 'diagonal', name: 'Diagonal', waste: 15, desc: 'The grid turned on point, 45°. More cuts at every wall.', draw: diagonalP },
     { id: 'basket', name: 'Basketweave', waste: 12, desc: 'Pairs woven over-and-under — a classic bath-floor look.', draw: basketP },
-    { id: 'pinwheel', name: 'Pinwheel', waste: 15, desc: 'A small tile spun inside four larger ones. Also called hopscotch.', draw: pinwheelP }
+    { id: 'pinwheel', name: 'Pinwheel', waste: 15, desc: 'A small tile spun inside four larger ones. Also called hopscotch.', draw: pinwheelP },
+    { id: 'hex', name: 'Hexagon', waste: 15, desc: 'Six-sided tile in offset rows. Size is measured across the flats. Every edge piece is an angled cut.', draw: hexP },
+    { id: 'sheet', name: 'Mosaic sheet', waste: 12, desc: 'Penny rounds, small hex, tiny squares — sold on mesh sheets. You cut the sheet, not the pieces.', draw: sheetP }
   ];
 
   var gal = document.getElementById('pat-gallery');
@@ -1660,60 +1795,49 @@ window.TBstate = {
 /* ============ WHOLE-SURFACE 2D layout + cut list ============ */
 (function () {
   var SLIVER = 2.0, NS = 'http://www.w3.org/2000/svg';
-  var GRID = { straight: 1, brick: 1, thirds: 1, vertical: 1 };
+  var GRID = { straight: 1, brick: 1, thirds: 1, vertical: 1, sheet: 1 };   // sheet = a grid whose unit is the sheet
   var NAMES = { diagonal: 'diagonal', basket: 'basketweave', pinwheel: 'pinwheel' };
   var svg = document.getElementById('surf2d');
   var cutEl = document.getElementById('cutlist');
   var noteEl = document.getElementById('surf2d-note');
   var wordEl = document.getElementById('surf-word');
 
-  function toDim(x) {
-    var neg = x < 0; x = Math.abs(x);
-    var whole = Math.floor(x + 1e-9), frac = x - whole, six = Math.round(frac * 16);
-    if (six === 16) { whole += 1; six = 0; }
-    var num = six, den = 16;
-    while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; }
-    var s = '';
-    if (whole > 0) s += whole;
-    if (num > 0) s += (whole > 0 ? ' ' : '') + num + '/' + den;
-    if (s === '') s = '0';
-    return (neg ? '-' : '') + s + '″';
-  }
+  function toDim(x) { return window.TBU.fmt(x); }
 
   /* Tile a REGION: full tile flush at the region's bottom, cut lands at its top;
      per-row horizontal offset by pattern. The whole surface is just the region
      (0,0)–(W,H) — edge trim shrinks it, and an accent band splits it in two, each
      half starting a fresh full course off the band. */
-  function layoutRegion(x0, x1, y0, y1, tile, grout, mode, pat) {
-    var mod = tile + grout, tiles = [], baseAnchor;
-    if (x1 - x0 <= 0.02 || y1 - y0 <= 0.02) return tiles;
+  function layoutRegion(x0, x1, y0, y1, tw, th, grout, mode, pat) {
+    var modX = tw + grout, modY = th + grout, tiles = [], baseAnchor;
+    if (x1 - x0 <= 0.02 || y1 - y0 <= 0.02 || !(tw > 0) || !(th > 0)) return tiles;
     if (mode === 'left') baseAnchor = x0;
-    else if (mode === 'joint') baseAnchor = (x0 + x1) / 2 - tile - grout / 2;
-    else baseAnchor = (x0 + x1) / 2 - tile / 2;
+    else if (mode === 'joint') baseAnchor = (x0 + x1) / 2 - tw - grout / 2;
+    else baseAnchor = (x0 + x1) / 2 - tw / 2;
     function xoff(ri) {
-      if (pat === 'brick') return (((ri % 2) + 2) % 2) ? tile / 2 : 0;
-      if (pat === 'thirds') return ((((ri % 3) + 3) % 3) * tile / 3);
-      return 0; // straight, vertical (square tile → same grid)
+      if (pat === 'brick') return (((ri % 2) + 2) % 2) ? tw / 2 : 0;
+      if (pat === 'thirds') return ((((ri % 3) + 3) % 3) * tw / 3);
+      return 0; // straight / vertical
     }
     var rows = [], r = 0;
-    while (r < 4000) {
-      var top = y1 - tile - r * mod, bottom = top + tile;
+    while (r < 6000) {
+      var top = y1 - th - r * modY, bottom = top + th;
       if (bottom <= y0 + 0.02) break;
       var ct = Math.max(y0, top), cb = Math.min(y1, bottom);
-      if (cb - ct > 0.02) rows.push({ top: ct, h: cb - ct, fullH: (cb - ct) >= tile - 0.02, ri: r });
+      if (cb - ct > 0.02) rows.push({ top: ct, h: cb - ct, fullH: (cb - ct) >= th - 0.02, ri: r });
       r++;
     }
     rows.forEach(function (row) {
       var anchor = baseAnchor + xoff(row.ri);
-      var kMin = Math.floor((x0 - anchor) / mod) - 2, kMax = Math.ceil((x1 - anchor) / mod) + 2;
+      var kMin = Math.floor((x0 - anchor) / modX) - 2, kMax = Math.ceil((x1 - anchor) / modX) + 2;
       for (var k = kMin; k <= kMax; k++) {
-        var left = anchor + k * mod, right = left + tile, cl = Math.max(x0, left), cr = Math.min(x1, right);
-        if (cr - cl > 0.02) tiles.push({ x: cl, y: row.top, w: cr - cl, h: row.h, fullW: (cr - cl) >= tile - 0.02, fullH: row.fullH });
+        var left = anchor + k * modX, right = left + tw, cl = Math.max(x0, left), cr = Math.min(x1, right);
+        if (cr - cl > 0.02) tiles.push({ x: cl, y: row.top, w: cr - cl, h: row.h, fullW: (cr - cl) >= tw - 0.02, fullH: row.fullH });
       }
     });
     return tiles;
   }
-  function layout2D(W, H, tile, grout, mode, pat) { return layoutRegion(0, W, 0, H, tile, grout, mode, pat); }
+  function layout2D(W, H, tw, th, grout, mode, pat) { return layoutRegion(0, W, 0, H, tw, th, grout, mode, pat); }
 
   /* Edge trim eats into the field before any tile is set — that's why it's decided
      early. Bands split what's left into stacked regions. */
@@ -1737,9 +1861,9 @@ window.TBstate = {
     if (lower - yTop > 0.02) segs.push([yTop, lower]);
     return { x0: x0, x1: x1, segs: segs, bands: bs, trim: t };
   }
-  function fieldTiles(W, H, tile, grout, mode, pat, tr, bands) {
+  function fieldTiles(W, H, tw, th, grout, mode, pat, tr, bands) {
     var F = fieldRegions(W, H, tr, bands), out = [];
-    F.segs.forEach(function (s) { out = out.concat(layoutRegion(F.x0, F.x1, s[0], s[1], tile, grout, mode, pat)); });
+    F.segs.forEach(function (s) { out = out.concat(layoutRegion(F.x0, F.x1, s[0], s[1], tw, th, grout, mode, pat)); });
     return out;
   }
   // an accent band is its own little run of tile across the field
@@ -1767,8 +1891,64 @@ window.TBstate = {
     }
   }
   // Herringbone: verified plane tiling t1=(-3,-1), t2=(-2,-2), V-offset=(-2,0). Clip to surface → cuts.
-  function herringbone2D(W, H, tile) {
-    var s = tile / 2, tiles = [], cx = W / 2, cy = H / 2, N = Math.ceil(Math.max(W, H) / s) + 6;
+  /* ---- hexagon: a real tessellation, not a grid ----
+     Hex tile is called out by its across-flats size. Pointy-top hexes sit in
+     rows offset by half a width, with rows 3/4 of a hex apart. Each hex is
+     clipped to the surface, so the edge pieces are true shapes. */
+  function hexTiles(W, H, across, grout) {
+    var R = across / Math.sqrt(3);                 // centre → vertex
+    var stepX = across + grout, stepY = 1.5 * R + grout * 0.866;
+    var out = [], rows = Math.ceil(H / stepY) + 2, cols = Math.ceil(W / stepX) + 2;
+    for (var r = -1; r <= rows; r++) {
+      for (var c = -1; c <= cols; c++) {
+        var cx = c * stepX + ((r % 2 + 2) % 2 ? stepX / 2 : 0), cy = r * stepY;
+        var poly = [];
+        for (var i = 0; i < 6; i++) {
+          var a = Math.PI / 180 * (90 + 60 * i);
+          poly.push({ x: cx + R * Math.cos(a), y: cy - R * Math.sin(a) });
+        }
+        var clipped = clipToRect(poly, 0, 0, W, H);
+        if (clipped.length < 3) continue;
+        var ar = polyArea2(clipped), fullA = 1.5 * Math.sqrt(3) * R * R;
+        if (ar < 0.05) continue;
+        var pb = polyBBox(clipped);
+        out.push({ x: pb.x0, y: pb.y0, w: pb.x1 - pb.x0, h: pb.y1 - pb.y0, poly: clipped,
+          hex: true, area: ar, fullW: ar >= fullA - 0.05, fullH: ar >= fullA - 0.05 });
+      }
+    }
+    return out;
+  }
+  function clipToRect(poly, x0, y0, x1, y1) {
+    var edges = [[1, 0, x0], [-1, 0, -x1], [0, 1, y0], [0, -1, -y1]], out = poly;
+    edges.forEach(function (e) {
+      var inp = out; out = [];
+      for (var i = 0; i < inp.length; i++) {
+        var P = inp[i], Q = inp[(i + 1) % inp.length];
+        var dp = e[0] * P.x + e[1] * P.y - e[2], dq = e[0] * Q.x + e[1] * Q.y - e[2];
+        if (dp >= -1e-9) out.push(P);
+        if ((dp > 1e-9 && dq < -1e-9) || (dp < -1e-9 && dq > 1e-9)) {
+          var t = dp / (dp - dq);
+          out.push({ x: P.x + (Q.x - P.x) * t, y: P.y + (Q.y - P.y) * t });
+        }
+      }
+    });
+    return out;
+  }
+  function polyArea2(p) { var a = 0; for (var i = 0, j = p.length - 1; i < p.length; j = i++) a += p[j].x * p[i].y - p[i].x * p[j].y; return Math.abs(a) / 2; }
+  function polyBBox(p) {
+    var b = { x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9 };
+    p.forEach(function (v) { if (v.x < b.x0) b.x0 = v.x; if (v.x > b.x1) b.x1 = v.x; if (v.y < b.y0) b.y0 = v.y; if (v.y > b.y1) b.y1 = v.y; });
+    return b;
+  }
+
+  // The interlock needs a 2:1 plank. A real 12x24 IS 2:1, so use it as-is;
+  // anything else falls back to long/2 x long and the note says so.
+  function plankOf(tw, th) {
+    var lo = Math.min(tw, th), hi = Math.max(tw, th);
+    return (Math.abs(hi - 2 * lo) <= Math.max(0.05, hi * 0.02)) ? { s: lo, exact: true } : { s: hi / 2, exact: false };
+  }
+  function herringbone2D(W, H, tw, th) {
+    var s = plankOf(tw, th).s, tiles = [], cx = W / 2, cy = H / 2, N = Math.ceil(Math.max(W, H) / s) + 6;
     for (var i = -N; i <= N; i++) for (var j = -N; j <= N; j++) {
       var px = cx + (i * -3 + j * -2) * s, py = cy + (i * -1 + j * -2) * s;
       pushClip(tiles, px, py, 2 * s, s, W, H);
@@ -1851,7 +2031,11 @@ window.TBstate = {
       : atL ? 'the left edge' : atR ? 'the right edge' : atB ? 'the bottom edge' : atT ? 'the top edge' : 'the middle';
     return 'niche notch ' + toDim(o.w) + ' × ' + toDim(o.h) + ' out of ' + where;
   }
-  function sizeOf(t) { return toDim(t.w) + ' × ' + toDim(t.h); }
+  function sizeOf(t) {
+    if (t.hex && !(t.fullW && t.fullH)) return '⬡ ' + toDim(t.w) + ' × ' + toDim(t.h);
+    if (t.hex) return '⬡ ' + toDim(t.w) + ' across';
+    return toDim(t.w) + ' × ' + toDim(t.h);
+  }
   function holeText(t) {
     if (!t.holes) return '';
     return t.holes.map(function (h) {
@@ -1870,6 +2054,7 @@ window.TBstate = {
   }
   function noteOf(t) {
     var parts = [], nt = nicheText(t), ht = holeText(t);
+    if (t.hex && !(t.fullW && t.fullH)) parts.push('angled hex piece · ' + Math.round(t.area) + ' sq in');
     if (nt) parts.push(nt);
     if (ht) parts.push(ht);
     if (t.role) parts.push(t.role);
@@ -1877,13 +2062,13 @@ window.TBstate = {
   }
   function keyOf(t) { var n = noteOf(t); return n ? sizeOf(t) + ' · ' + n : sizeOf(t); }
   // group the cut pieces by exact size and number them 1..N (cut-by-number)
-  function buildCuts(tiles, tile) {
+  function buildCuts(tiles, tw, th) {
     var order = [], groups = {};
     tiles.forEach(function (t) {
       if (t.fullW && t.fullH && !t.holes && !t.niched) return;
       var key = keyOf(t);
       if (!groups[key]) {
-        var cat = classify(t, tile);
+        var cat = classify(t, tw, th);
         groups[key] = { num: 0, n: 0, key: key, size: sizeOf(t), note: noteOf(t), isHole: !!t.holes,
           isNiche: !!(t.niched || t.role),
           label: (cat === 'half' ? 'half tile' : cat === 'third' ? 'third tile' : cat === 'sliver' ? 'sliver' : ''),
@@ -1919,6 +2104,27 @@ window.TBstate = {
       // A notched tile is ONE piece — so inset the tile then subtract the notch grown by the
       // same inset. Drawing the raw parts each inset would put a grout line through one tile.
       var shapes;
+      if (t.poly) {                                   // hexagons and other true shapes
+        var pg = document.createElementNS(NS, 'polygon');
+        var sh = gi * 0.9;
+        var cx0 = t.x + t.w / 2, cy0 = t.y + t.h / 2;
+        var shrunk = t.poly.map(function (p) {         // pull each vertex in a touch for the joint
+          var dx = p.x - cx0, dy = p.y - cy0, L = Math.sqrt(dx * dx + dy * dy) || 1;
+          return (p.x - dx / L * sh).toFixed(3) + ',' + (p.y - dy / L * sh).toFixed(3);
+        });
+        pg.setAttribute('points', shrunk.join(' '));
+        pg.setAttribute('fill', fill);
+        if (active) { pg.setAttribute('stroke', 'var(--ink)'); pg.setAttribute('stroke-width', Math.max(0.5, tile * 0.035)); }
+        else if (t.holes) { pg.setAttribute('stroke', 'var(--amber)'); pg.setAttribute('stroke-width', Math.max(0.22, tile * 0.022)); }
+        if (done) pg.setAttribute('opacity', '0.55');
+        svg.appendChild(pg);
+        if (t.holes) t.holes.forEach(function (h) { circles.push(h); });
+        if (isPiece && g) {
+          var fsh = Math.min(Math.min(t.w, t.h) * 0.5, tile * 0.42);
+          if (fsh >= 2) labels.push({ t: t, g: g, fs: fsh, sliver: sliver, done: done });
+        }
+        return;
+      }
       if (t.niched) {
         shapes = [{ x: t.x + gi, y: t.y + gi, w: Math.max(0, t.w - 2 * gi), h: Math.max(0, t.h - 2 * gi) }];
         t.boxes.forEach(function (b) {
@@ -1996,21 +2202,23 @@ window.TBstate = {
     });
   }
 
-  function classify(t, tile) {
+  // half/third are judged against the dimension that was actually cut, so a
+  // 12x24 plank cut to 12x12 reads "half", not "some 12 inch piece"
+  function classify(t, tw, th) {
+    if (t.hex) return (!t.fullW || !t.fullH) && Math.min(t.w, t.h) <= SLIVER ? 'sliver' : (t.fullW && t.fullH ? 'full' : 'cut');
     if (t.niched) return t.thin <= SLIVER ? 'sliver' : 'cut';   // an L-piece isn't a "half tile"
     if (t.fullW && t.fullH) return 'full';
-    var cutDims = [];
-    if (!t.fullW) cutDims.push(t.w);
-    if (!t.fullH) cutDims.push(t.h);
-    var minc = Math.min.apply(null, cutDims);
+    var pairs = [];
+    if (!t.fullW) pairs.push([t.w, tw]);
+    if (!t.fullH) pairs.push([t.h, th]);
+    var minc = Math.min.apply(null, pairs.map(function (p) { return p[0]; }));
     if (minc <= SLIVER) return 'sliver';
-    var tol = Math.max(0.25, tile * 0.05);
-    function near(v, target) { return Math.abs(v - target) <= tol; }
-    var isHalf = cutDims.some(function (c) { return near(c, tile / 2); });
-    var isThird = cutDims.some(function (c) { return near(c, tile / 3) || near(c, 2 * tile / 3); });
-    if (cutDims.length === 1) { return isHalf ? 'half' : (isThird ? 'third' : 'cut'); }
-    if (cutDims.every(function (c) { return near(c, tile / 2); })) return 'half';
-    if (cutDims.every(function (c) { return near(c, tile / 3) || near(c, 2 * tile / 3); })) return 'third';
+    function near(v, target, ref) { return Math.abs(v - target) <= Math.max(0.25, ref * 0.05); }
+    function isHalf(p) { return near(p[0], p[1] / 2, p[1]); }
+    function isThird(p) { return near(p[0], p[1] / 3, p[1]) || near(p[0], 2 * p[1] / 3, p[1]); }
+    if (pairs.length === 1) return isHalf(pairs[0]) ? 'half' : (isThird(pairs[0]) ? 'third' : 'cut');
+    if (pairs.every(isHalf)) return 'half';
+    if (pairs.every(isThird)) return 'third';
     return 'cut';
   }
 
@@ -2038,14 +2246,16 @@ window.TBstate = {
   }
 
   function jobTotal() {
-    var T = window.TB || {}, tile = T.tile, grout = T.grout, mode = T.mode || 'tile', pat = T.pattern || 'straight';
+    var T = window.TB || {}, tw = T.tw || T.tile || 12, th = T.th || T.tile || 12, tile = tw, grout = T.grout, mode = T.mode || 'tile', pat = T.pattern || 'straight';
     var surfaces = T.surfaces || [], el = document.getElementById('job-total');
     if (!el) return;
     if (!surfaces.length) { el.innerHTML = ''; return; }
     var agg = { full: 0, half: 0, third: 0, cut: 0, sliver: 0, holes: 0, total: 0 }, measured = 0;
     surfaces.forEach(function (s) {
       if (!(s.w > 0) || !(s.h > 0)) return;
-      var raw = (pat === 'herring') ? herringbone2D(s.w, s.h, tile) : (GRID[pat] ? fieldTiles(s.w, s.h, tile, grout, mode, pat, s.trim, s.bands) : null);
+      var raw = (pat === 'herring') ? herringbone2D(s.w, s.h, tw, th)
+              : (pat === 'hex') ? hexTiles(s.w, s.h, Math.min(tw, th), grout)
+              : (GRID[pat] ? fieldTiles(s.w, s.h, tw, th, grout, mode, pat, s.trim, s.bands) : null);
       if (!raw) return;
       if (pat !== 'herring') raw = raw.concat(bandTiles(s.w, s.h, grout, s.trim, s.bands));
       var bx = nicheBoxes(s.niches, s.h), inner = [];
@@ -2060,7 +2270,7 @@ window.TBstate = {
       measured++; agg.total += tiles.length;
       tiles.forEach(function (t) {
         if (t.holes) { agg.holes++; return; }              // a holed tile is its own job, not a plain cut
-        var c = classify(t, tile); if (agg[c] !== undefined) agg[c]++;
+        var c = classify(t, tw, th); if (agg[c] !== undefined) agg[c]++;
       });
     });
     if (!measured) { el.innerHTML = '<div class="cutrow"><span class="dim">This pattern lays at an angle — per-surface counts only for now.</span></div>'; return; }
@@ -2077,12 +2287,25 @@ window.TBstate = {
   function render() {
     jobTotal();
     var T = window.TB || {};
-    var W = T.wall, H = T.height, tile = T.tile, grout = T.grout, mode = T.mode || 'tile', pat = T.pattern || 'straight', surf = T.surface || 'wall';
+    var W = T.wall, H = T.height, tw = T.tw || T.tile || 12, th = T.th || T.tile || 12, tile = tw, grout = T.grout, mode = T.mode || 'tile', pat = T.pattern || 'straight', surf = T.surface || 'wall';
     if (wordEl) wordEl.textContent = surf;
     if (!(W > 0) || !(H > 0) || !(tile > 0)) { svg.innerHTML = ''; cutEl.innerHTML = ''; noteEl.textContent = ''; return; }
+    if (pat === 'hex') {
+      svg.style.display = 'block';
+      var across = Math.min(tw, th);
+      var hx = hexTiles(W, H, across, grout);
+      var hxb = nicheBoxes(T.niches, H);
+      annotate(hx, T.holes, H);
+      var hxc = buildCuts(hx, tw, th);
+      draw(hx, W, H, grout, across, hxc, hxb, T.trim);
+      cutlist(hxc, across, hx.length);
+      noteEl.textContent = toDim(across) + ' hexagon, measured across the flats — rows offset by half a hex. '
+        + 'Every edge piece is an angled cut, so they read as shapes with a bounding size, not a tidy W × H.';
+      return;
+    }
     if (pat === 'herring') {
       svg.style.display = 'block';
-      var hraw = herringbone2D(W, H, tile), hboxes = nicheBoxes(T.niches, H), hint = [];
+      var hraw = herringbone2D(W, H, tw, th), hboxes = nicheBoxes(T.niches, H), hint = [];
       hboxes.forEach(function (b) {
         hraw.forEach(function (t) {
           var c = clipRect({ x: t.x, y: t.y, w: t.w, h: t.h }, b);
@@ -2091,10 +2314,12 @@ window.TBstate = {
       });
       var ht = applyNiches(hraw, hboxes).concat(hint);
       annotate(ht, T.holes, H);
-      var hcuts = buildCuts(ht, tile);
+      var hcuts = buildCuts(ht, tw, th);
       draw(ht, W, H, grout, tile, hcuts, hboxes);
       cutlist(hcuts, tile, ht.length);
-      noteEl.textContent = 'Herringbone planks (' + toDim(tile / 2) + ' × ' + toDim(tile) + ') interlocked at 90°. Full planks in porcelain, every edge cut in blue — that’s why it eats labor.';
+      var pk = plankOf(tw, th);
+      noteEl.textContent = 'Herringbone planks (' + toDim(pk.s) + ' × ' + toDim(2 * pk.s) + ') interlocked at 90°. Full planks in porcelain, every edge cut in blue — that’s why it eats labor.' +
+        (pk.exact ? '' : ' Your tile isn’t 2:1, and herringbone needs a 2:1 plank to interlock — this lays out a ' + toDim(pk.s) + ' × ' + toDim(2 * pk.s) + ' plank instead.');
       return;
     }
     if (!GRID[pat]) {
@@ -2103,7 +2328,7 @@ window.TBstate = {
       return;
     }
     svg.style.display = 'block';
-    var raw = fieldTiles(W, H, tile, grout, mode, pat, T.trim, T.bands);
+    var raw = fieldTiles(W, H, tw, th, grout, mode, pat, T.trim, T.bands);
     var bandsT = bandTiles(W, H, grout, T.trim, T.bands);
     var boxes = nicheBoxes(T.niches, H);
     // the inside of a niche continues the wall's own grid — which is why landing the
@@ -2118,11 +2343,11 @@ window.TBstate = {
     });
     var tiles = applyNiches(raw, boxes).concat(interior).concat(applyNiches(bandsT, boxes));
     annotate(tiles, T.holes, H);
-    var cuts = buildCuts(tiles, tile);
+    var cuts = buildCuts(tiles, tw, th);
     draw(tiles, W, H, grout, tile, cuts, boxes, T.trim);
     cutlist(cuts, tile, tiles.length);
     var tr = trimIn(T.trim), anyTrim = tr.l || tr.r || tr.t || tr.b;
-    noteEl.textContent = 'Full tiles in porcelain, cuts in blue, slivers (≤2″) in red — a full tile lands at the bottom, cuts ride the top. ' + toDim(grout) + ' grout.' +
+    noteEl.textContent = (pat === 'sheet' ? toDim(tw) + ' × ' + toDim(th) + ' sheets — the numbers below are SHEET cuts; trim the mesh between pieces, don\'t cut through them. ' : toDim(tw) + ' × ' + toDim(th) + ' tile. ') + 'cuts in blue, slivers (≤2″) in red — a full one lands at the bottom, cuts ride the top. ' + toDim(grout) + ' grout.' +
       (boxes.length ? ' The niche opening is outlined; the tile inside it is the back panel.' : '') +
       (anyTrim ? ' The hatched edge is trim — the field re-centres inside it.' : '') +
       (bandsT.length ? ' The band is set off on its own; courses above it start fresh off its top.' : '');
@@ -2401,30 +2626,14 @@ window.TBstate = {
     galley: [['R', 96], ['D', 60], ['L', 96], ['U', 60]]
   };
   function seed(k) { return PRESETS[k].map(function (s) { return { dir: s[0], len: s[1], ang: 0 }; }); }
-  var state = { unit: 'ft', origin: 'center', nx: 0, ny: 0, preset: 'L', segs: seed('L') };
+  var state = { origin: 'center', nx: 0, ny: 0, preset: 'L', segs: seed('L') };
   var doneCuts = {}, activeCut = null;
 
   /* ---- formatting ---- */
-  function toDim(x) {
-    var neg = x < 0; x = Math.abs(x);
-    var whole = Math.floor(x + 1e-9), frac = x - whole, six = Math.round(frac * 16);
-    if (six === 16) { whole += 1; six = 0; }
-    var num = six, den = 16;
-    while (num > 0 && num % 2 === 0) { num /= 2; den /= 2; }
-    var s = '';
-    if (whole > 0) s += whole;
-    if (num > 0) s += (whole > 0 ? ' ' : '') + num + '/' + den;
-    if (s === '') s = '0';
-    return (neg ? '-' : '') + s + '″';
-  }
-  function fmtLen(inches) {
-    if (state.unit === 'in') return toDim(inches);
-    var ft = Math.floor(inches / 12 + 1e-9), rem = inches - ft * 12;
-    if (rem < 1 / 32) return ft + '′';
-    return (ft > 0 ? ft + '′ ' : '') + toDim(rem);
-  }
-  function toUnit(inches) { return state.unit === 'ft' ? inches / 12 : inches; }
-  function fromUnit(v) { return state.unit === 'ft' ? v * 12 : v; }
+  function toDim(x) { return window.TBU.fmt(x); }
+  function fmtLen(inches) { return window.TBU.fmt(inches); }
+  function toUnit(inches) { return window.TBU.num(inches); }
+  function fromUnit(v) { return window.TBU.toIn(v); }
 
   /* ---- geometry ---- */
   function area2(p) { var a = 0; for (var i = 0, j = p.length - 1; i < p.length; j = i++) a += p[j].x * p[i].y - p[i].x * p[j].y; return a; }
@@ -2499,10 +2708,12 @@ window.TBstate = {
   }
 
   /* ---- tile cells over the bounding box ---- */
-  function cells(bb, tile, grout, pat) {
-    var mod = tile + grout, list = [], i, j;
+  function cells(bb, tw, th, grout, pat) {
+    var modX = tw + grout, modY = th + grout, list = [], i, j;
     if (pat === 'herring') {
-      var s = tile / 2, cx = (bb.x0 + bb.x1) / 2 + state.nx, cy = (bb.y0 + bb.y1) / 2 + state.ny;
+      var lo = Math.min(tw, th), hi = Math.max(tw, th);
+      var s = (Math.abs(hi - 2 * lo) <= Math.max(0.05, hi * 0.02)) ? lo : hi / 2;
+      var cx = (bb.x0 + bb.x1) / 2 + state.nx, cy = (bb.y0 + bb.y1) / 2 + state.ny;
       var N = Math.ceil(Math.max(bb.x1 - bb.x0, bb.y1 - bb.y0) / s) + 6;
       for (i = -N; i <= N; i++) for (j = -N; j <= N; j++) {
         var px = cx + (i * -3 + j * -2) * s, py = cy + (i * -1 + j * -2) * s;
@@ -2511,13 +2722,13 @@ window.TBstate = {
       }
       return list.filter(function (c) { return c.x < bb.x1 && c.x + c.w > bb.x0 && c.y < bb.y1 && c.y + c.h > bb.y0; });
     }
-    var ax = (state.origin === 'corner' ? bb.x0 : (bb.x0 + bb.x1) / 2 - tile / 2) + state.nx;
-    var ay = (state.origin === 'corner' ? bb.y0 : (bb.y0 + bb.y1) / 2 - tile / 2) + state.ny;
-    var r0 = Math.floor((bb.y0 - ay) / mod) - 1, r1 = Math.ceil((bb.y1 - ay) / mod) + 1;
+    var ax = (state.origin === 'corner' ? bb.x0 : (bb.x0 + bb.x1) / 2 - tw / 2) + state.nx;
+    var ay = (state.origin === 'corner' ? bb.y0 : (bb.y0 + bb.y1) / 2 - th / 2) + state.ny;
+    var r0 = Math.floor((bb.y0 - ay) / modY) - 1, r1 = Math.ceil((bb.y1 - ay) / modY) + 1;
     for (var r = r0; r <= r1; r++) {
-      var off = pat === 'brick' ? ((((r % 2) + 2) % 2) ? tile / 2 : 0) : pat === 'thirds' ? ((((r % 3) + 3) % 3) * tile / 3) : 0;
-      var c0 = Math.floor((bb.x0 - ax - off) / mod) - 1, c1 = Math.ceil((bb.x1 - ax - off) / mod) + 1;
-      for (var c = c0; c <= c1; c++) list.push({ x: ax + off + c * mod, y: ay + r * mod, w: tile, h: tile });
+      var off = pat === 'brick' ? ((((r % 2) + 2) % 2) ? tw / 2 : 0) : pat === 'thirds' ? ((((r % 3) + 3) % 3) * tw / 3) : 0;
+      var c0 = Math.floor((bb.x0 - ax - off) / modX) - 1, c1 = Math.ceil((bb.x1 - ax - off) / modX) + 1;
+      for (var c = c0; c <= c1; c++) list.push({ x: ax + off + c * modX, y: ay + r * modY, w: tw, h: th });
     }
     return list;
   }
@@ -2526,15 +2737,14 @@ window.TBstate = {
   function layTile() {
     var poly = room();
     if (poly.length < 3) return null;
-    var T = window.TB || {}, tile = T.tile || 12, grout = (T.grout === undefined ? 0.125 : T.grout), pat = T.pattern || 'straight';
+    var T = window.TB || {}, tw = T.tw || T.tile || 12, th = T.th || T.tile || 12, tile = tw, grout = (T.grout === undefined ? 0.125 : T.grout), pat = T.pattern || 'straight';
     if (pat === 'vertical') pat = 'straight';
     var tris = triangulate(poly);
     if (!tris.length) return null;
     var bb = bboxOf([poly]);
-    var list = cells(bb, tile, grout, pat);
+    var list = cells(bb, tw, th, grout, pat);
     if (list.length > MAXCELLS) return { over: list.length, poly: poly, bb: bb };
     var pieces = [], full = 0, cutN = 0;
-    var cellArea = tile * tile;
     list.forEach(function (c) {
       var rect = [{ x: c.x, y: c.y }, { x: c.x + c.w, y: c.y }, { x: c.x + c.w, y: c.y + c.h }, { x: c.x, y: c.y + c.h }];
       var parts = [], a = 0;
@@ -2563,7 +2773,7 @@ window.TBstate = {
     order.sort(function (a, b) { return groups[b].n - groups[a].n; });
     order.forEach(function (k, i) { groups[k].num = i + 1; });
     return { poly: poly, bb: bb, pieces: pieces, full: full, cuts: cutN, groups: groups, order: order,
-             tile: tile, pat: pat, area: polyArea(poly) / 144 };
+             tile: tile, tw: tw, th: th, pat: pat, area: polyArea(poly) / 144 };
   }
 
   /* ---- draw the blueprint ---- */
@@ -2710,7 +2920,7 @@ window.TBstate = {
     draw(R);
     var A = document.getElementById('map-area'), F = document.getElementById('map-full'), C = document.getElementById('map-cuts');
     if (R && R.over) {
-      cutEl.innerHTML = ''; A.textContent = (polyArea(room()) / 144).toFixed(0); F.textContent = '—'; C.textContent = '—';
+      cutEl.innerHTML = ''; A.textContent = window.TBU.metric() ? (polyArea(room()) * 0.00064516).toFixed(1) : (polyArea(room()) / 144).toFixed(0); F.textContent = '—'; C.textContent = '—';
       noteEl.textContent = 'That\'s ' + R.over.toLocaleString() + ' tiles — too many to lay out piece by piece on a phone. Bump the tile size up, or split the room into sections.';
       return;
     }
@@ -2719,9 +2929,10 @@ window.TBstate = {
       noteEl.textContent = 'Walk the walls above and the floor draws itself.'; return;
     }
     cutlist(R);
-    A.textContent = R.area.toFixed(0); F.textContent = R.full; C.textContent = R.cuts;
+    A.textContent = window.TBU.metric() ? (R.area * 0.092903).toFixed(1) : R.area.toFixed(0);
+    F.textContent = R.full; C.textContent = R.cuts;
     var T = window.TB || {};
-    noteEl.textContent = 'Tile, grout and pattern come from the Layout tab — ' + toDim(R.tile) + ' ' +
+    noteEl.textContent = 'Tile, grout and pattern come from the Layout tab — ' + toDim(R.tw) + ' × ' + toDim(R.th) + ' ' +
       ({ straight: 'straight', brick: 'running bond', thirds: 'third bond', herring: 'herringbone' }[R.pat] || R.pat) +
       ', ' + toDim(T.grout === undefined ? 0.125 : T.grout) + ' joints. Full tiles in porcelain, cuts in blue, slivers (≤2″) in red. ' +
       (suppressed ? 'The pieces are too small to number on screen at this size — tap a cut below and its tiles light up. ' : '') +
@@ -2730,7 +2941,7 @@ window.TBstate = {
 
   /* ---- wiring ---- */
   document.getElementById('map-add').addEventListener('click', function () {
-    state.segs.push({ dir: 'R', len: fromUnit(state.unit === 'ft' ? 4 : 48), ang: 0 }); state.preset = null; renderPresets(); renderSegs(); sync();
+    state.segs.push({ dir: 'R', len: 48, ang: 0 }); state.preset = null; renderPresets(); renderSegs(); sync();
   });
   document.getElementById('map-fit').addEventListener('click', function () {   // add the wall that lands back on the start
     var v = verts(), a = v[0], b = v[v.length - 1], dx = a.x - b.x, dy = a.y - b.y;
@@ -2741,12 +2952,9 @@ window.TBstate = {
     state.segs.push(named ? { dir: named[0], len: L, ang: 0 } : { dir: 'A', len: L, ang: ang });
     state.preset = null; renderPresets(); renderSegs(); sync();
   });
-  document.querySelectorAll('#map-unit button').forEach(function (b) {
-    b.addEventListener('click', function () {
-      state.unit = b.dataset.u;
-      document.querySelectorAll('#map-unit button').forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
-      renderSegs(); sync();
-    });
+  window.addEventListener('tb-units', function () {
+    document.querySelectorAll('.area-label').forEach(function (el) { el.textContent = window.TBU.areaLabel(); });
+    renderSegs(); sync();
   });
   document.querySelectorAll('#map-origin button').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -2769,12 +2977,11 @@ window.TBstate = {
   });
 
   window.TBstate.register('map', function () {
-    return { unit: state.unit, origin: state.origin, nx: state.nx, ny: state.ny, preset: state.preset, segs: JSON.parse(JSON.stringify(state.segs)) };
+    return { origin: state.origin, nx: state.nx, ny: state.ny, preset: state.preset, segs: JSON.parse(JSON.stringify(state.segs)) };
   }, function (v) {
     if (!v) return;
-    state.unit = v.unit || 'ft'; state.origin = v.origin || 'center'; state.nx = v.nx || 0; state.ny = v.ny || 0;
+    state.origin = v.origin || 'center'; state.nx = v.nx || 0; state.ny = v.ny || 0;
     state.preset = v.preset; state.segs = v.segs || seed('L'); doneCuts = {}; activeCut = null;
-    document.querySelectorAll('#map-unit button').forEach(function (o) { o.setAttribute('aria-pressed', o.dataset.u === state.unit ? 'true' : 'false'); });
     document.querySelectorAll('#map-origin button').forEach(function (o) { o.setAttribute('aria-pressed', o.dataset.o === state.origin ? 'true' : 'false'); });
     document.getElementById('map-nx').value = state.nx; document.getElementById('map-ny').value = state.ny;
     renderPresets(); renderSegs(); sync();
