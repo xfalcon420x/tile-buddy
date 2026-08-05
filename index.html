@@ -333,6 +333,25 @@
   .hole-empty { font-size: .8rem; color: var(--ink-faint); font-style: italic; padding: 4px 2px 2px; }
   .cbnrow.hole .cbn-num { background: var(--amber); color: #fff; }
   .cbnrow.hole .cbn-lbl { color: var(--amber); text-transform: none; letter-spacing: 0; font-size: .74rem; }
+  .cbnrow.niche .cbn-lbl { text-transform: none; letter-spacing: 0; font-size: .74rem; color: var(--chalk-deep); }
+
+  /* niches */
+  .niche-item { border: 1.5px solid var(--panel-edge); border-radius: 11px; padding: 11px 12px; margin-top: 10px; background: var(--ground); }
+  .niche-top { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+  .niche-top .hname { font-weight: 650; font-size: .92rem; flex: 1; }
+  .niche-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .niche-grid label { display: flex; flex-direction: column; gap: 3px; font-size: .6rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); font-weight: 600; text-align: center; }
+  .niche-grid input { font: inherit; font-family: ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; font-size: .86rem; padding: 7px 2px; width: 100%; text-align: center; color: var(--ink); background: var(--panel); border: 1.5px solid var(--panel-edge); border-radius: 7px; -moz-appearance: textfield; }
+  .niche-grid input::-webkit-outer-spin-button, .niche-grid input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .niche-grid input:focus-visible { outline: none; border-color: var(--chalk); box-shadow: 0 0 0 3px var(--chalk-wash); }
+  .niche-align { margin-top: 10px; font-size: .78rem; line-height: 1.45; display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+  .niche-align.ok { color: var(--chalk-deep); }
+  .niche-align.off { color: var(--amber); }
+  .niche-snap { font: inherit; font-size: .76rem; font-weight: 650; cursor: pointer; padding: 5px 11px; border-radius: 7px; border: 1.5px solid var(--chalk); background: var(--chalk-wash); color: var(--chalk-deep); white-space: nowrap; }
+  .niche-snap:hover { background: var(--chalk); color: #fff; }
+  .niche-trim { margin-top: 10px; padding-top: 9px; border-top: 1px dashed var(--panel-edge); font-size: .76rem; color: var(--ink-soft); line-height: 1.5; }
+  .niche-trim b { color: var(--ink); font-family: ui-monospace, Menlo, monospace; font-weight: 700; }
+  .niche-empty { font-size: .8rem; color: var(--ink-faint); font-style: italic; padding: 8px 2px 2px; }
 
   /* job surfaces list */
   #surf-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 6px; }
@@ -550,6 +569,13 @@
       <div class="chips" id="hole-add"></div>
       <div id="hole-list"></div>
       <p class="field-hint">Measure to the <b>centre of the pipe</b> — across from the left edge of this surface, and up from the floor. Then the cut list tells you where the hole lands <b>on its own tile</b>, which is the number you actually mark. Sizes are starting points: cut to what the valve needs and the escutcheon covers.</p>
+    </div>
+
+    <div class="card">
+      <p class="label">Niches &amp; recesses <span class="hint">a hole in the field, with its own layout</span></p>
+      <div class="chips" id="niche-add"></div>
+      <div id="niche-list"></div>
+      <p class="field-hint">Measure to the <b>opening</b> — across from the left edge, up from the floor to the sill. The trade rule is to <b>land the opening on grout lines</b>: do that and the inside tiles out in full pieces with no slivers at the edge. Pitch the sill <b>1/8″</b> into the shower so it drains.</p>
     </div>
 
     <div class="card">
@@ -849,7 +875,9 @@ window.TBstate = {
     fireplace: ['Fireplace', 60, 48],
     custom: ['Surface 1', 48, 48]
   };
-  function jobSurfaces(key) { var a = JOBS[key], out = []; for (var i = 0; i < a.length; i += 3) out.push({ t: a[i], w: a[i + 1], h: a[i + 2], holes: [] }); return out; }
+  function jobSurfaces(key) { var a = JOBS[key], out = []; for (var i = 0; i < a.length; i += 3) out.push({ t: a[i], w: a[i + 1], h: a[i + 2], holes: [], niches: [] }); return out; }
+  // shampoo ~48" up, soap ~24" — trade rough-in heights; 3.5" deep = a 2x4 stud bay
+  var NICHE_KINDS = [['Shampoo niche', 14, 14, 48, 3.5], ['Soap niche', 12, 6, 24, 3.5], ['Custom niche', 12, 12, 40, 3.5]];
   // seeded from trade-standard rough-in heights — starting points, meant to be corrected
   var HOLE_KINDS = [['Valve', 4.5, 48], ['Shower head', 1.25, 78], ['Tub spout', 1.25, 28], ['Body jet', 1.25, 42], ['Drain', 4.5, null], ['Other', 1.25, 36]];
   var state = { job: 'shower', surfaces: jobSurfaces('shower'), active: 0, tile: 12, grout: 0.125, mode: null };
@@ -975,10 +1003,13 @@ window.TBstate = {
       surface: (/floor|pan/i.test(A().t) ? 'floor' : 'wall'),
       pattern: (window.TB && window.TB.pattern) || 'straight',
       holes: (A().holes || []).slice(),
-      surfaces: state.surfaces.map(function (s) { return { w: s.w, h: s.h, type: s.t, holes: (s.holes || []).slice() }; }),
+      niches: (A().niches || []).slice(),
+      surfaces: state.surfaces.map(function (s) { return { w: s.w, h: s.h, type: s.t, holes: (s.holes || []).slice(), niches: (s.niches || []).slice() }; }),
       active: state.active
     };
+    state.lastMode = active;
     window.dispatchEvent(new Event('tb-change'));
+    refreshNicheStatuses();   // badges track tile size / grout / mode, in place
   }
 
   function drawBar(r) {
@@ -1052,7 +1083,7 @@ window.TBstate = {
     document.getElementById('lbl-width').textContent = 'Width';
     document.getElementById('lbl-height').textContent = /floor|pan/i.test(a.t) ? 'Depth' : 'Height';
     document.getElementById('active-label').innerHTML = a.t + ' &middot; size';
-    renderHoles();
+    renderHoles(); renderNiches();
   }
   function renderJobs() {
     var host = document.getElementById('job-type'); host.innerHTML = '';
@@ -1124,6 +1155,106 @@ window.TBstate = {
     });
   }
 
+  /* ---- niches: a recess is a void in the field AND its own little wall ----
+     The trade rule is to land the opening on grout lines. Snapping does exactly
+     that, which is what makes the inside tile out in full pieces. */
+  function jointsX(W, tile, grout, mode) {
+    var mod = tile + grout, ax = mode === 'left' ? 0 : mode === 'joint' ? W / 2 - tile - grout / 2 : W / 2 - tile / 2, out = [];
+    for (var k = Math.floor(-ax / mod) - 2; k <= Math.ceil((W - ax) / mod) + 2; k++) out.push(ax + k * mod + tile + grout / 2);
+    return out;
+  }
+  function jointsY(H, tile, grout) {   // measured up from the floor; row r spans r*mod → r*mod+tile
+    var mod = tile + grout, out = [0];
+    for (var r = 0; r * mod <= H + mod; r++) out.push(r * mod + tile + grout / 2);
+    return out;
+  }
+  function nearest(v, list) {
+    var best = list[0], bd = Infinity;
+    list.forEach(function (j) { var d = Math.abs(j - v); if (d < bd) { bd = d; best = j; } });
+    return { at: best, off: bd };
+  }
+  // derive the grid the same way render() does — never read a mode left over from
+  // whichever surface happened to be active last, or the badge lies after a job reload
+  function currentMode() {
+    if (state.mode) return state.mode;
+    var W = A().w, tile = state.tile, grout = state.grout;
+    if (!(W > 0) || !(tile > 0)) return 'tile';
+    return recommend({ tile: build(W, tile, grout, 'tile'), joint: build(W, tile, grout, 'joint') });
+  }
+  function nicheAlign(n) {
+    var a = A(), jx = jointsX(a.w, state.tile, state.grout, currentMode()), jy = jointsY(a.h, state.tile, state.grout);
+    return { l: nearest(n.x, jx), r: nearest(n.x + n.w, jx), b: nearest(n.y, jy), t: nearest(n.y + n.h, jy) };
+  }
+  var nicheItems = [];
+  function alignHTML(n) {
+    var al = nicheAlign(n), TOL = 0.0625;
+    var offs = [['Left', al.l], ['Right', al.r], ['Sill', al.b], ['Top', al.t]].filter(function (p) { return p[1].off > TOL; });
+    return { aligned: !offs.length, html: !offs.length
+      ? '<span>✓ Opening lands on the grout lines — the inside tiles out in full pieces.</span>'
+      : '<span>⚠ ' + offs.map(function (p) { return p[0] + ' is ' + toDim(p[1].off) + ' off'; }).join(', ') +
+        ' the nearest joint.</span><button class="niche-snap" type="button">Snap to joints</button>' };
+  }
+  function trimHTML(n) {
+    return 'Sill <b>' + fmtFrac(n.w) + ' × ' + fmtFrac(n.d) + '</b> · head <b>' + fmtFrac(n.w) + ' × ' + fmtFrac(n.d) +
+      '</b> · 2 jambs <b>' + fmtFrac(n.h) + ' × ' + fmtFrac(n.d) + '</b> — pitch the sill 1/8″ in.';
+  }
+  // update one card's status in place — rebuilding the list on every keystroke
+  // would tear out the focused field and shut the phone keyboard mid-number
+  function refreshNiche(box, n) {
+    var st = alignHTML(n), al = box.querySelector('.niche-align');
+    al.className = 'niche-align ' + (st.aligned ? 'ok' : 'off');
+    al.innerHTML = st.html;
+    box.querySelector('.niche-trim').innerHTML = trimHTML(n);
+    var snap = box.querySelector('.niche-snap');
+    if (snap) snap.addEventListener('click', function () {
+      var q = nicheAlign(n), L = q.l.at, R = q.r.at, B = q.b.at, T2 = q.t.at;
+      if (R > L) { n.x = Math.round(L * 16) / 16; n.w = Math.round((R - L) * 16) / 16; }
+      if (T2 > B) { n.y = Math.round(B * 16) / 16; n.h = Math.round((T2 - B) * 16) / 16; }
+      var ins = box.querySelectorAll('.niche-grid input');
+      ['x', 'y', 'w', 'h', 'd'].forEach(function (k, j) { ins[j].value = n[k]; });
+      refreshNiche(box, n); render();
+    });
+  }
+  function refreshNicheStatuses() { nicheItems.forEach(function (it) { refreshNiche(it.box, it.n); }); }
+  function renderNiches() {
+    var host = document.getElementById('niche-list'), a = A();
+    if (!a.niches) a.niches = [];
+    host.innerHTML = ''; nicheItems = [];
+    if (!a.niches.length) { host.innerHTML = '<p class="niche-empty">No niches on this surface yet.</p>'; return; }
+    a.niches.forEach(function (n, i) {
+      var box = document.createElement('div'); box.className = 'niche-item';
+      box.innerHTML =
+        '<div class="niche-top"><span class="hname">' + n.t + '</span><button class="del" type="button" aria-label="Remove niche">×</button></div>' +
+        '<div class="niche-grid">' +
+        '<label>From left<input type="number" step="0.25" min="0" inputmode="decimal" value="' + n.x + '"></label>' +
+        '<label>Up<input type="number" step="0.25" min="0" inputmode="decimal" value="' + n.y + '"></label>' +
+        '<label>Wide<input type="number" step="0.25" min="1" inputmode="decimal" value="' + n.w + '"></label>' +
+        '<label>Tall<input type="number" step="0.25" min="1" inputmode="decimal" value="' + n.h + '"></label>' +
+        '<label>Deep<input type="number" step="0.25" min="0.5" inputmode="decimal" value="' + n.d + '"></label>' +
+        '</div><div class="niche-align"></div><div class="niche-trim"></div>';
+      var ins = box.querySelectorAll('.niche-grid input');
+      ['x', 'y', 'w', 'h', 'd'].forEach(function (k, j) {
+        ins[j].addEventListener('input', function () { n[k] = parseFloat(ins[j].value) || 0; refreshNiche(box, n); render(); });
+      });
+      box.querySelector('.del').addEventListener('click', function () { a.niches.splice(i, 1); renderNiches(); render(); });
+      host.appendChild(box);
+      nicheItems.push({ box: box, n: n });
+      refreshNiche(box, n);
+    });
+  }
+  function renderNicheAdd() {
+    var host = document.getElementById('niche-add'); host.innerHTML = '';
+    NICHE_KINDS.forEach(function (k) {
+      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = '+ ' + k[0];
+      b.addEventListener('click', function () {
+        var a = A(); if (!a.niches) a.niches = [];
+        a.niches.push({ t: k[0], x: Math.max(0, Math.round((a.w - k[1]) / 2 * 4) / 4), y: Math.min(k[3], Math.max(0, a.h - k[2])), w: k[1], h: k[2], d: k[4] });
+        renderNiches(); render();
+      });
+      host.appendChild(b);
+    });
+  }
+
   document.getElementById('add-wall').addEventListener('click', function () { state.surfaces.push({ t: 'Wall ' + (state.surfaces.length + 1), w: 48, h: 84 }); state.active = state.surfaces.length - 1; state.job = 'custom'; renderJobs(); renderSurfList(); loadActive(); sync(); });
   document.getElementById('add-floor').addEventListener('click', function () { state.surfaces.push({ t: 'Floor ' + (state.surfaces.length + 1), w: 60, h: 60 }); state.active = state.surfaces.length - 1; state.job = 'custom'; renderJobs(); renderSurfList(); loadActive(); sync(); });
 
@@ -1137,7 +1268,7 @@ window.TBstate = {
   });
 
   window.addEventListener('resize', function () { render(); });
-  renderHoleAdd(); renderJobs(); renderSurfList(); loadActive(); sync();
+  renderHoleAdd(); renderNicheAdd(); renderJobs(); renderSurfList(); loadActive(); sync();
 })();
 
 /* ============ BUY LIST engine ============ */
@@ -1473,6 +1604,57 @@ window.TBstate = {
       if (hits.length) t.holes = hits;
     });
   }
+  /* ---- niches: a recess is a void in the field AND its own little wall ---- */
+  function clipRect(p, b) {
+    var x0 = Math.max(p.x, b.x), x1 = Math.min(p.x + p.w, b.x + b.w);
+    var y0 = Math.max(p.y, b.y), y1 = Math.min(p.y + p.h, b.y + b.h);
+    return (x1 - x0 > 1e-9 && y1 - y0 > 1e-9) ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+  }
+  function subRect(p, b, out) {   // p minus b → up to 4 rects; exact, no gaps, no overlaps
+    var i = clipRect(p, b);
+    if (!i) { out.push(p); return; }
+    if (i.y - p.y > 1e-9) out.push({ x: p.x, y: p.y, w: p.w, h: i.y - p.y });
+    if (p.y + p.h - (i.y + i.h) > 1e-9) out.push({ x: p.x, y: i.y + i.h, w: p.w, h: p.y + p.h - (i.y + i.h) });
+    if (i.x - p.x > 1e-9) out.push({ x: p.x, y: i.y, w: i.x - p.x, h: i.h });
+    if (p.x + p.w - (i.x + i.w) > 1e-9) out.push({ x: i.x + i.w, y: i.y, w: p.x + p.w - (i.x + i.w), h: i.h });
+  }
+  function nicheBoxes(niches, H) {
+    return (niches || []).filter(function (n) { return n.w > 0 && n.h > 0; })
+      .map(function (n) { return { x: n.x, y: H - n.y - n.h, w: n.w, h: n.h, src: n }; });
+  }
+  function applyNiches(tiles, boxes) {
+    if (!boxes.length) return tiles;
+    var out = [];
+    tiles.forEach(function (t) {
+      var hit = boxes.filter(function (b) { return clipRect(t, b); });
+      if (!hit.length) { out.push(t); return; }
+      var parts = [{ x: t.x, y: t.y, w: t.w, h: t.h }];
+      hit.forEach(function (b) { var nx = []; parts.forEach(function (p) { subRect(p, b, nx); }); parts = nx; });
+      if (!parts.length) return;                                   // tile sits wholly in the opening
+      if (parts.length === 1) {                                    // still a rectangle → an ordinary cut
+        var p = parts[0];
+        out.push({ x: p.x, y: p.y, w: p.w, h: p.h, holes: t.holes,
+          fullW: p.w >= t.w - 0.02 && t.fullW, fullH: p.h >= t.h - 0.02 && t.fullH });
+        return;
+      }
+      out.push({ x: t.x, y: t.y, w: t.w, h: t.h, fullW: false, fullH: false, holes: t.holes,
+        parts: parts, niched: true, ov: clipRect(t, hit[0]), boxes: hit,
+        thin: Math.min.apply(null, parts.map(function (p) { return Math.min(p.w, p.h); })) });
+    });
+    return out;
+  }
+  function nicheText(t) {
+    if (!t.niched) return '';
+    var o = t.ov, e = 1e-6;
+    var atL = o.x - t.x <= e, atR = (t.x + t.w) - (o.x + o.w) <= e;
+    var atB = (t.y + t.h) - (o.y + o.h) <= e, atT = o.y - t.y <= e;
+    var where = (atL && atB) ? 'the bottom-left corner' : (atR && atB) ? 'the bottom-right corner'
+      : (atL && atT) ? 'the top-left corner' : (atR && atT) ? 'the top-right corner'
+      : (atL && atR) ? (atB ? 'the bottom edge' : 'the top edge')
+      : (atB && atT) ? (atL ? 'the left edge' : 'the right edge')
+      : atL ? 'the left edge' : atR ? 'the right edge' : atB ? 'the bottom edge' : atT ? 'the top edge' : 'the middle';
+    return 'niche notch ' + toDim(o.w) + ' × ' + toDim(o.h) + ' out of ' + where;
+  }
   function sizeOf(t) { return toDim(t.w) + ' × ' + toDim(t.h); }
   function holeText(t) {
     if (!t.holes) return '';
@@ -1490,16 +1672,24 @@ window.TBstate = {
       return d + ' notch · centre ' + parts.join(', ');
     }).join('  +  ');
   }
-  function keyOf(t) { var k = sizeOf(t), ht = holeText(t); return ht ? k + ' · ' + ht : k; }
+  function noteOf(t) {
+    var parts = [], nt = nicheText(t), ht = holeText(t);
+    if (nt) parts.push(nt);
+    if (ht) parts.push(ht);
+    if (t.role) parts.push(t.role);
+    return parts.join(' · ');
+  }
+  function keyOf(t) { var n = noteOf(t); return n ? sizeOf(t) + ' · ' + n : sizeOf(t); }
   // group the cut pieces by exact size and number them 1..N (cut-by-number)
   function buildCuts(tiles, tile) {
     var order = [], groups = {};
     tiles.forEach(function (t) {
-      if (t.fullW && t.fullH && !t.holes) return;
+      if (t.fullW && t.fullH && !t.holes && !t.niched) return;
       var key = keyOf(t);
       if (!groups[key]) {
         var cat = classify(t, tile);
-        groups[key] = { num: 0, n: 0, key: key, size: sizeOf(t), hole: holeText(t), isHole: !!t.holes,
+        groups[key] = { num: 0, n: 0, key: key, size: sizeOf(t), note: noteOf(t), isHole: !!t.holes,
+          isNiche: !!(t.niched || t.role),
           label: (cat === 'half' ? 'half tile' : cat === 'third' ? 'third tile' : cat === 'sliver' ? 'sliver' : ''),
           sliver: cat === 'sliver' };
         order.push(key);
@@ -1511,7 +1701,7 @@ window.TBstate = {
     return { order: order, groups: groups };
   }
 
-  function draw(tiles, W, H, grout, tile, cuts) {
+  function draw(tiles, W, H, grout, tile, cuts, boxes) {
     var pxW = svg.clientWidth || 500;
     var pxH = Math.max(120, Math.min(380, pxW * H / W));
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
@@ -1528,23 +1718,48 @@ window.TBstate = {
       var g = key && cuts ? cuts.groups[key] : null;
       var done = key ? !!doneCuts[key] : false, active = key && activeCut === key;
       var sliver = isPiece && g && g.sliver;
-      var cutShape = (!t.fullW || !t.fullH);
-      var rect = document.createElementNS(NS, 'rect');
-      rect.setAttribute('x', (t.x + gi).toFixed(3));
-      rect.setAttribute('y', (t.y + gi).toFixed(3));
-      rect.setAttribute('width', Math.max(0, t.w - 2 * gi).toFixed(3));
-      rect.setAttribute('height', Math.max(0, t.h - 2 * gi).toFixed(3));
-      rect.setAttribute('rx', Math.min(0.6, tile * 0.05));
-      rect.setAttribute('fill', !cutShape ? 'var(--tile-full)' : (done ? 'var(--tile-full-edge)' : (sliver ? 'var(--warn)' : 'var(--chalk)')));
-      if (active) { rect.setAttribute('stroke', 'var(--ink)'); rect.setAttribute('stroke-width', Math.max(0.5, tile * 0.035)); }
-      else if (t.holes) { rect.setAttribute('stroke', 'var(--amber)'); rect.setAttribute('stroke-width', Math.max(0.22, tile * 0.022)); }
-      if (done) rect.setAttribute('opacity', '0.55');
-      svg.appendChild(rect);
+      var cutShape = (!t.fullW || !t.fullH || t.niched);
+      var fill = !cutShape ? 'var(--tile-full)' : (done ? 'var(--tile-full-edge)' : (sliver ? 'var(--warn)' : 'var(--chalk)'));
+      // A notched tile is ONE piece — so inset the tile then subtract the notch grown by the
+      // same inset. Drawing the raw parts each inset would put a grout line through one tile.
+      var shapes;
+      if (t.niched) {
+        shapes = [{ x: t.x + gi, y: t.y + gi, w: Math.max(0, t.w - 2 * gi), h: Math.max(0, t.h - 2 * gi) }];
+        t.boxes.forEach(function (b) {
+          var grown = { x: b.x - gi, y: b.y - gi, w: b.w + 2 * gi, h: b.h + 2 * gi }, nx = [];
+          shapes.forEach(function (p) { subRect(p, grown, nx); });
+          shapes = nx;
+        });
+      } else {
+        shapes = [{ x: t.x + gi, y: t.y + gi, w: Math.max(0, t.w - 2 * gi), h: Math.max(0, t.h - 2 * gi) }];
+      }
+      shapes.forEach(function (sh) {
+        var rect = document.createElementNS(NS, 'rect');
+        rect.setAttribute('x', sh.x.toFixed(3)); rect.setAttribute('y', sh.y.toFixed(3));
+        rect.setAttribute('width', sh.w.toFixed(3)); rect.setAttribute('height', sh.h.toFixed(3));
+        if (!t.niched) rect.setAttribute('rx', Math.min(0.6, tile * 0.05));
+        rect.setAttribute('fill', fill);
+        if (t.niched) { rect.setAttribute('stroke', fill); rect.setAttribute('stroke-width', '0.02'); }  // close AA seams
+        if (active) { rect.setAttribute('stroke', 'var(--ink)'); rect.setAttribute('stroke-width', Math.max(0.5, tile * 0.035)); }
+        else if (t.holes) { rect.setAttribute('stroke', 'var(--amber)'); rect.setAttribute('stroke-width', Math.max(0.22, tile * 0.022)); }
+        if (done) rect.setAttribute('opacity', '0.55');
+        svg.appendChild(rect);
+      });
       if (t.holes) t.holes.forEach(function (h) { circles.push(h); });
       if (isPiece && g) {
         var fs = Math.min(Math.min(t.w, t.h) * 0.5, tile * 0.42);
         if (fs >= 2) labels.push({ t: t, g: g, fs: fs, sliver: sliver, done: done });
       }
+    });
+    // the niche opening, outlined so the recess reads as a recess
+    (boxes || []).forEach(function (b) {
+      var r = document.createElementNS(NS, 'rect');
+      r.setAttribute('x', (b.x - gi).toFixed(3)); r.setAttribute('y', (b.y - gi).toFixed(3));
+      r.setAttribute('width', (b.w + 2 * gi).toFixed(3)); r.setAttribute('height', (b.h + 2 * gi).toFixed(3));
+      r.setAttribute('fill', 'none'); r.setAttribute('stroke', 'var(--chalk-deep)');
+      r.setAttribute('stroke-width', Math.max(0.14, tile * 0.03).toFixed(3));
+      r.setAttribute('rx', Math.min(0.5, tile * 0.04));
+      svg.appendChild(r);
     });
     // the holes sit on top of the tile field...
     var seen = {};
@@ -1576,6 +1791,7 @@ window.TBstate = {
   }
 
   function classify(t, tile) {
+    if (t.niched) return t.thin <= SLIVER ? 'sliver' : 'cut';   // an L-piece isn't a "half tile"
     if (t.fullW && t.fullH) return 'full';
     var cutDims = [];
     if (!t.fullW) cutDims.push(t.w);
@@ -1604,8 +1820,8 @@ window.TBstate = {
     }
     cuts.order.forEach(function (k) {
       var g = cuts.groups[k], done = !!doneCuts[k], active = activeCut === k;
-      var sub = g.hole ? g.hole : (g.label ? g.label + (g.sliver ? ' ⚠' : '') : '');
-      html += '<div class="cbnrow' + (done ? ' done' : '') + (active ? ' active' : '') + (g.sliver ? ' sliver' : '') + (g.isHole ? ' hole' : '') + '" data-key="' + k.replace(/"/g, '&quot;') + '">' +
+      var sub = g.note ? g.note + (g.sliver ? ' ⚠' : '') : (g.label ? g.label + (g.sliver ? ' ⚠' : '') : '');
+      html += '<div class="cbnrow' + (done ? ' done' : '') + (active ? ' active' : '') + (g.sliver ? ' sliver' : '') + (g.isHole ? ' hole' : '') + (g.isNiche ? ' niche' : '') + '" data-key="' + k.replace(/"/g, '&quot;') + '">' +
         '<span class="cbn-num">' + g.num + '</span>' +
         '<span class="cbn-mid"><span class="cbn-dim">' + g.size + '</span>' + (sub ? '<span class="cbn-lbl">' + sub + '</span>' : '') + '</span>' +
         '<span class="cbn-qty">×' + g.n + '</span>' +
@@ -1623,8 +1839,16 @@ window.TBstate = {
     var agg = { full: 0, half: 0, third: 0, cut: 0, sliver: 0, holes: 0, total: 0 }, measured = 0;
     surfaces.forEach(function (s) {
       if (!(s.w > 0) || !(s.h > 0)) return;
-      var tiles = (pat === 'herring') ? herringbone2D(s.w, s.h, tile) : (GRID[pat] ? layout2D(s.w, s.h, tile, grout, mode, pat) : null);
-      if (!tiles) return;
+      var raw = (pat === 'herring') ? herringbone2D(s.w, s.h, tile) : (GRID[pat] ? layout2D(s.w, s.h, tile, grout, mode, pat) : null);
+      if (!raw) return;
+      var bx = nicheBoxes(s.niches, s.h), inner = [];
+      bx.forEach(function (b) {
+        raw.forEach(function (t) {
+          var c = clipRect({ x: t.x, y: t.y, w: t.w, h: t.h }, b);
+          if (c) inner.push({ x: c.x, y: c.y, w: c.w, h: c.h, role: 'niche back', fullW: c.w >= t.w - 0.02, fullH: c.h >= t.h - 0.02 });
+        });
+      });
+      var tiles = applyNiches(raw, bx).concat(inner);
       annotate(tiles, s.holes, s.h);
       measured++; agg.total += tiles.length;
       tiles.forEach(function (t) {
@@ -1651,10 +1875,17 @@ window.TBstate = {
     if (!(W > 0) || !(H > 0) || !(tile > 0)) { svg.innerHTML = ''; cutEl.innerHTML = ''; noteEl.textContent = ''; return; }
     if (pat === 'herring') {
       svg.style.display = 'block';
-      var ht = herringbone2D(W, H, tile);
+      var hraw = herringbone2D(W, H, tile), hboxes = nicheBoxes(T.niches, H), hint = [];
+      hboxes.forEach(function (b) {
+        hraw.forEach(function (t) {
+          var c = clipRect({ x: t.x, y: t.y, w: t.w, h: t.h }, b);
+          if (c) hint.push({ x: c.x, y: c.y, w: c.w, h: c.h, role: 'niche back', fullW: c.w >= t.w - 0.02, fullH: c.h >= t.h - 0.02 });
+        });
+      });
+      var ht = applyNiches(hraw, hboxes).concat(hint);
       annotate(ht, T.holes, H);
       var hcuts = buildCuts(ht, tile);
-      draw(ht, W, H, grout, tile, hcuts);
+      draw(ht, W, H, grout, tile, hcuts, hboxes);
       cutlist(hcuts, tile, ht.length);
       noteEl.textContent = 'Herringbone planks (' + toDim(tile / 2) + ' × ' + toDim(tile) + ') interlocked at 90°. Full planks in porcelain, every edge cut in blue — that’s why it eats labor.';
       return;
@@ -1665,12 +1896,25 @@ window.TBstate = {
       return;
     }
     svg.style.display = 'block';
-    var tiles = layout2D(W, H, tile, grout, mode, pat);
+    var raw = layout2D(W, H, tile, grout, mode, pat);
+    var boxes = nicheBoxes(T.niches, H);
+    // the inside of a niche continues the wall's own grid — which is why landing the
+    // opening on grout lines makes the interior come out in full tiles
+    var interior = [];
+    boxes.forEach(function (b) {
+      raw.forEach(function (t) {
+        var c = clipRect({ x: t.x, y: t.y, w: t.w, h: t.h }, b);
+        if (c) interior.push({ x: c.x, y: c.y, w: c.w, h: c.h, role: 'niche back',
+          fullW: c.w >= t.w - 0.02, fullH: c.h >= t.h - 0.02 });
+      });
+    });
+    var tiles = applyNiches(raw, boxes).concat(interior);
     annotate(tiles, T.holes, H);
     var cuts = buildCuts(tiles, tile);
-    draw(tiles, W, H, grout, tile, cuts);
+    draw(tiles, W, H, grout, tile, cuts, boxes);
     cutlist(cuts, tile, tiles.length);
-    noteEl.textContent = 'Full tiles in porcelain, cuts in blue, slivers (≤2″) in red — a full tile lands at the bottom, cuts ride the top. ' + toDim(grout) + ' grout.';
+    noteEl.textContent = 'Full tiles in porcelain, cuts in blue, slivers (≤2″) in red — a full tile lands at the bottom, cuts ride the top. ' + toDim(grout) + ' grout.' +
+      (boxes.length ? ' The niche opening is outlined; the tile inside it is the back panel.' : '');
   }
 
   if (cutEl) cutEl.addEventListener('click', function (e) {
