@@ -631,13 +631,34 @@
         <span class="pv-lbl">Which edges</span>
         <div class="chips" id="trim-edges"></div>
       </div>
+      <div id="schluter-wrap" hidden>
+        <div class="trim-row"><span class="pv-lbl">Profile</span><div class="chips" id="schluter-type"></div></div>
+        <div class="trim-row"><span class="pv-lbl">Tile thickness</span><div class="chips" id="tile-thick"></div></div>
+      </div>
       <div class="trim-row" id="trim-wrap">
-        <label class="pv-lbl" for="trim-w">Width</label>
+        <label class="pv-lbl" for="trim-w">Face width</label>
         <input type="number" id="trim-w" step="0.0625" min="0" inputmode="decimal" value="0.375">
         <span class="unit unit-label">in</span>
       </div>
       <div id="trim-report" class="trim-report"></div>
       <p class="field-hint">Trim takes its width off the field <b>before</b> the first tile goes down, so the layout re-centres inside what's left. That's why it's an early call, not a finishing one.</p>
+    </div>
+
+    <div class="card" id="heat-card" hidden>
+      <p class="label">Heated floor <span class="hint">electric mat or cable</span></p>
+      <div class="chips" id="heat-toggle"></div>
+      <div id="heat-body" hidden>
+        <div class="trim-row"><span class="pv-lbl">Keep back from walls</span>
+          <input type="number" id="heat-setback" step="0.5" min="0" inputmode="decimal" value="3">
+          <span class="unit unit-label">in</span></div>
+        <div class="trim-row"><span class="pv-lbl">Output</span><div class="chips" id="heat-w"></div></div>
+        <div class="trim-row"><span class="pv-lbl">Supply</span><div class="chips" id="heat-v"></div></div>
+        <p class="label" style="margin:16px 0 8px">Leave unheated <span class="hint">nothing permanent sits on heat</span></p>
+        <div class="chips" id="heat-excl-add"></div>
+        <div id="heat-excl"></div>
+        <div id="heat-report" class="trim-report"></div>
+      </div>
+      <p class="field-hint">The cable <b>cannot be cut shorter</b> — so you size the mat to the heated area and go <b>under</b>, never over. Keep it back from the walls, out from under the tub, vanity and toilet, and drop the floor sensor <b>between two cable runs</b>, not across one.</p>
     </div>
 
     <div class="card">
@@ -1030,7 +1051,16 @@ window.TBstate = {
   function newSurface(t, w, h) { return { t: t, w: w, h: h, wTop: null, holes: [], niches: [], bands: [], trim: { type: 'none', w: 0.375, l: false, r: false, t: false, b: false } }; }
   function jobSurfaces(key) { var a = JOBS[key], out = []; for (var i = 0; i < a.length; i += 3) out.push(newSurface(a[i], a[i + 1], a[i + 2])); return out; }
   // bullnose is a tile band; the profiles are thin. Widths are defaults, all editable.
-  var TRIM_TYPES = [['none', 'None', 0], ['bullnose', 'Bullnose', 3], ['schluter', 'Metal profile', 0.375], ['pencil', 'Pencil', 0.5], ['pvc', 'PVC', 0.5]];
+  var TRIM_TYPES = [['none', 'None', 0], ['bullnose', 'Bullnose', 3], ['schluter', 'Schluter / metal', 0.375], ['pencil', 'Pencil', 0.5], ['pvc', 'PVC', 0.5]];
+  /* Schluter profiles are ordered by FAMILY + the tile thickness they sit against —
+     a "3/8 Jolly" means the 3/8 in leg height, not a 3/8 in face. Face widths below are
+     the part that eats into the field; confirm against the profile you actually buy. */
+  var SCHLUTER = [['schiene', 'Schiene', 0.25, 'plain L-angle, squared edge'],
+                  ['jolly', 'Jolly', 0.25, 'squared edge, small radius — the common one'],
+                  ['rondec', 'Rondec', 0.375, 'bullnose profile, rounded edge'],
+                  ['quadec', 'Quadec', 0.375, 'fully squared, heavier reveal'],
+                  ['dilex', 'Dilex', 0.25, 'movement joint, not an edge']];
+  var TILE_THICK = [0.1875, 0.25, 0.3125, 0.375, 0.5];
   // shampoo ~48" up, soap ~24" — trade rough-in heights; 3.5" deep = a 2x4 stud bay
   var NICHE_KINDS = [['Shampoo niche', 14, 14, 48, 3.5], ['Soap niche', 12, 6, 24, 3.5], ['Custom niche', 12, 12, 40, 3.5]];
   // seeded from trade-standard rough-in heights — starting points, meant to be corrected
@@ -1251,7 +1281,7 @@ window.TBstate = {
     });
   })();
   // a unit switch changes nothing about the job — only how it reads
-  window.addEventListener('tb-units', function () { showSize(); showTile(); renderSurfList(); renderHoles(); renderNiches(); renderTrim(); renderBands(); sync(); });
+  window.addEventListener('tb-units', function () { showSize(); showTile(); renderSurfList(); renderHoles(); renderNiches(); renderTrim(); renderBands(); renderHeat(); sync(); });
 
   // ---- job type + surfaces list ----
   var JOB_LABELS = [['shower', 'Shower'], ['floor', 'Floor'], ['backsplash', 'Backsplash'], ['fireplace', 'Fireplace'], ['custom', 'Custom']];
@@ -1263,7 +1293,7 @@ window.TBstate = {
     document.getElementById('active-label').innerHTML = a.t + ' &middot; size';
     var ch = document.getElementById('curb-hint');
     if (ch) ch.hidden = !state.surfaces.some(function (s) { return /curb/i.test(s.t); });
-    renderHoles(); renderNiches(); renderTrim(); renderBands();
+    renderHoles(); renderNiches(); renderTrim(); renderBands(); renderHeat();
   }
   function renderJobs() {
     var host = document.getElementById('job-type'); host.innerHTML = '';
@@ -1442,7 +1472,13 @@ window.TBstate = {
   }
 
   /* ---- edge trim ---- */
-  function trimOf() { var a = A(); if (!a.trim) a.trim = { type: 'none', w: 0.375, l: false, r: false, t: false, b: false }; return a.trim; }
+  function trimOf() {
+    var a = A();
+    if (!a.trim) a.trim = { type: 'none', w: 0.375, l: false, r: false, t: false, b: false };
+    if (!a.trim.profile) a.trim.profile = 'jolly';
+    if (!a.trim.thick) a.trim.thick = 0.375;
+    return a.trim;
+  }
   function renderTrim() {
     var tr = trimOf(), a = A();
     var host = document.getElementById('trim-type'); host.innerHTML = '';
@@ -1467,16 +1503,40 @@ window.TBstate = {
       eh.appendChild(b);
     });
     document.getElementById('trim-w').value = window.TBU.num(tr.w);
+    var sw = document.getElementById('schluter-wrap');
+    sw.hidden = tr.type !== 'schluter';
+    if (!sw.hidden) {
+      var ph = document.getElementById('schluter-type'); ph.innerHTML = '';
+      SCHLUTER.forEach(function (k) {
+        var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = k[1];
+        b.title = k[3];
+        b.setAttribute('aria-pressed', tr.profile === k[0] ? 'true' : 'false');
+        b.addEventListener('click', function () { tr.profile = k[0]; tr.w = k[2]; renderTrim(); render(); });
+        ph.appendChild(b);
+      });
+      var th = document.getElementById('tile-thick'); th.innerHTML = '';
+      TILE_THICK.forEach(function (v) {
+        var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = window.TBU.fmt(v);
+        b.setAttribute('aria-pressed', Math.abs(tr.thick - v) < 1e-6 ? 'true' : 'false');
+        b.addEventListener('click', function () { tr.thick = v; renderTrim(); render(); });
+        th.appendChild(b);
+      });
+    }
     var on = ['l', 'r', 't', 'b'].filter(function (k) { return tr[k]; });
     var rep = document.getElementById('trim-report');
     if (!on.length || !(tr.w > 0)) { rep.innerHTML = '<span class="muted">No trim — the field runs wall to wall.</span>'; return; }
     var lin = (tr.l ? a.h : 0) + (tr.r ? a.h : 0) + (tr.t ? a.w : 0) + (tr.b ? a.w : 0);
     var fw = a.w - (tr.l ? tr.w : 0) - (tr.r ? tr.w : 0), fh = a.h - (tr.t ? tr.w : 0) - (tr.b ? tr.w : 0);
     var pieceLen = tr.type === 'bullnose' ? (Math.max(state.tw, state.th) || 12) : 96;   // profiles come in 8 ft sticks
+    var order = '';
+    if (tr.type === 'schluter') {
+      var prof = SCHLUTER.filter(function (k) { return k[0] === tr.profile; })[0] || SCHLUTER[1];
+      order = ' Order <b>' + prof[1] + '</b> in the <b>' + toDim(tr.thick) + '</b> height — that number is the tile thickness it sits against, not the face.';
+    }
     rep.innerHTML = 'Field is now <b>' + fmtFrac(fw) + '″ × ' + fmtFrac(fh) + '″</b> — the layout re-centres in that. ' +
       'Trim run <b>' + fmtFrac(lin) + '″</b> (' + (lin / 12).toFixed(1) + ' ft) → <b>' + Math.ceil(lin / pieceLen) + '</b> ' +
       (tr.type === 'bullnose' ? 'bullnose piece' + (Math.ceil(lin / pieceLen) === 1 ? '' : 's') + ' at ' + fmtFrac(pieceLen) + '″'
-                              : 'stick' + (Math.ceil(lin / pieceLen) === 1 ? '' : 's') + ' at 8 ft') + '.';
+                              : 'stick' + (Math.ceil(lin / pieceLen) === 1 ? '' : 's') + ' at 8 ft') + '.' + order;
   }
   document.getElementById('trim-w').addEventListener('input', function (e) { trimOf().w = window.TBU.toIn(parseFloat(e.target.value) || 0); renderTrim(); render(); });
 
@@ -1523,6 +1583,102 @@ window.TBstate = {
       host.appendChild(b);
     });
   }
+
+  /* ---- heated floor ----
+     Electric mats and cables are made to a fixed length. You pick the biggest standard
+     size that FITS inside the heated area; anything bigger simply will not go down.
+     Nothing permanent sits on top of heat, so fixtures come out of the area first. */
+  var MAT_SIZES = [10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 120, 140, 150];
+  var EXCL_KINDS = [['Toilet', 20, 14], ['Vanity', 36, 21], ['Tub', 60, 30], ['Shower base', 60, 36], ['Other', 24, 24]];
+  function heatOf() {
+    var a = A();
+    if (!a.heat) a.heat = { on: false, setback: 3, wpsf: 12, volts: 120, excl: [] };
+    return a.heat;
+  }
+  function isFloor() { return /floor|pan/i.test(A().t); }
+  function renderHeat() {
+    var card = document.getElementById('heat-card');
+    if (!card) return;
+    card.hidden = !isFloor();
+    if (card.hidden) return;
+    var h = heatOf(), a = A(), U = window.TBU;
+    var tg = document.getElementById('heat-toggle'); tg.innerHTML = '';
+    [['off', 'No heat'], ['on', 'Heated']].forEach(function (o) {
+      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = o[1];
+      b.setAttribute('aria-pressed', (h.on ? 'on' : 'off') === o[0] ? 'true' : 'false');
+      b.addEventListener('click', function () { h.on = o[0] === 'on'; renderHeat(); });
+      tg.appendChild(b);
+    });
+    document.getElementById('heat-body').hidden = !h.on;
+    if (!h.on) return;
+    document.getElementById('heat-setback').value = U.num(h.setback);
+    var wh = document.getElementById('heat-w'); wh.innerHTML = '';
+    [12, 15].forEach(function (v) {
+      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = v + ' W/sq ft';
+      b.setAttribute('aria-pressed', h.wpsf === v ? 'true' : 'false');
+      b.addEventListener('click', function () { h.wpsf = v; renderHeat(); });
+      wh.appendChild(b);
+    });
+    var vh = document.getElementById('heat-v'); vh.innerHTML = '';
+    [120, 240].forEach(function (v) {
+      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = v + 'V';
+      b.setAttribute('aria-pressed', h.volts === v ? 'true' : 'false');
+      b.addEventListener('click', function () { h.volts = v; renderHeat(); });
+      vh.appendChild(b);
+    });
+    var ea = document.getElementById('heat-excl-add'); ea.innerHTML = '';
+    EXCL_KINDS.forEach(function (k) {
+      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = '+ ' + k[0];
+      b.addEventListener('click', function () { h.excl.push({ t: k[0], w: k[1], d: k[2] }); renderHeat(); });
+      ea.appendChild(b);
+    });
+    var el = document.getElementById('heat-excl'); el.innerHTML = '';
+    if (!h.excl.length) el.innerHTML = '<p class="niche-empty">Nothing excluded — the whole floor inside the setback gets heat.</p>';
+    h.excl.forEach(function (x, i) {
+      var row = document.createElement('div'); row.className = 'hole-row';
+      row.innerHTML = '<span class="hname">' + x.t + '</span>' +
+        '<input type="number" step="0.5" min="0" inputmode="decimal" value="' + U.num(x.w) + '" aria-label="Width">' +
+        '<input type="number" step="0.5" min="0" inputmode="decimal" value="' + U.num(x.d) + '" aria-label="Depth">' +
+        '<span class="times">×</span>' +
+        '<button class="del" type="button" aria-label="Remove">×</button>';
+      var ins = row.querySelectorAll('input');
+      ins[0].addEventListener('input', function () { x.w = U.toIn(parseFloat(ins[0].value) || 0); heatReport(); });
+      ins[1].addEventListener('input', function () { x.d = U.toIn(parseFloat(ins[1].value) || 0); heatReport(); });
+      row.querySelector('.del').addEventListener('click', function () { h.excl.splice(i, 1); renderHeat(); });
+      el.appendChild(row);
+    });
+    heatReport();
+  }
+  function heatReport() {
+    var el = document.getElementById('heat-report');
+    if (!el) return;
+    var h = heatOf(), a = A();
+    var inner = Math.max(0, a.w - 2 * h.setback) * Math.max(0, a.h - 2 * h.setback) / 144;
+    var ex = 0; h.excl.forEach(function (x) { ex += (x.w * x.d) / 144; });
+    var heatable = Math.max(0, inner - ex);
+    var mat = 0;
+    for (var i = MAT_SIZES.length - 1; i >= 0; i--) if (MAT_SIZES[i] <= heatable + 1e-9) { mat = MAT_SIZES[i]; break; }
+    var watts = Math.round(mat * h.wpsf), amps = watts / h.volts;
+    // floor heat runs for hours, so it is a continuous load: a 15 A thermostat/circuit
+    // is only good for 12 A of it. Sizing to the raw 15 would be over the code limit.
+    var stats = Math.max(1, Math.ceil(amps / 12));
+    var gross = (a.w * a.h) / 144;
+    if (!(heatable > 0)) {
+      el.innerHTML = '<span style="color:var(--warn)">Nothing left to heat once the setback and the fixtures come out. Shrink the setback or the exclusions.</span>';
+      return;
+    }
+    el.innerHTML =
+      'Floor is <b>' + gross.toFixed(1) + ' sq ft</b>; inside a ' + toDim(h.setback) + ' setback and minus what sits on it, <b>' +
+      heatable.toFixed(1) + ' sq ft</b> can take heat.<br>' +
+      (mat ? 'Order the <b>' + mat + ' sq ft</b> mat — the largest standard size that fits. ' +
+        '<b>' + watts + ' W</b> at ' + h.wpsf + ' W/sq ft, <b>' + amps.toFixed(1) + ' A</b> on ' + h.volts + 'V' +
+        (stats > 1 ? ' — past what one 15 A thermostat may carry continuously (12 A), so you need <b>' + stats + '</b> of them, or a contactor.' : ' — inside the 12 A a 15 A thermostat may carry continuously, so one does it.') +
+        '<br><span class="muted">Leaves ' + (heatable - mat).toFixed(1) + ' sq ft unheated at the edges. That is normal: you can never cut the cable to make up a shortfall.</span>'
+        : '<span style="color:var(--warn)">Heated area is under the smallest standard mat (' + MAT_SIZES[0] + ' sq ft) — this floor wants loose cable, not a mat.</span>');
+  }
+  document.getElementById('heat-setback').addEventListener('input', function (e) {
+    heatOf().setback = window.TBU.toIn(parseFloat(e.target.value) || 0); heatReport();
+  });
 
   document.getElementById('add-wall').addEventListener('click', function () { state.surfaces.push(newSurface('Wall ' + (state.surfaces.length + 1), 48, 84)); state.active = state.surfaces.length - 1; state.job = 'custom'; renderJobs(); renderSurfList(); loadActive(); sync(); });
   document.getElementById('add-floor').addEventListener('click', function () { state.surfaces.push(newSurface('Floor ' + (state.surfaces.length + 1), 60, 60)); state.active = state.surfaces.length - 1; state.job = 'custom'; renderJobs(); renderSurfList(); loadActive(); sync(); });
@@ -2855,6 +3011,9 @@ window.TBstate = {
     });
     var ch = document.getElementById('curb-hint');
     if (ch && !ch.hidden) extras.push('<tr><td>Curb</td><td>Pitch the top 1/8″ toward the inside; trim ~3/8″ each end to drop between tiled walls.</td></tr>');
+    var hr = document.getElementById('heat-report'), hc = document.getElementById('heat-card');
+    if (hr && hc && !hc.hidden && hr.textContent.trim())
+      extras.push('<tr><td>Heated floor</td><td>' + esc(hr.textContent.replace(/\s+/g, ' ').trim()) + ' Cable cannot be cut; sensor between two runs.</td></tr>');
     var mapTotals = pairRows(document.querySelectorAll('#map-cutlist .cutrow'), '.k, .dim', '.cnt', 'total');
     sheet.innerHTML =
       '<h1>' + esc(jobName) + '</h1>' +
