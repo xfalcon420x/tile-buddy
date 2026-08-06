@@ -614,7 +614,7 @@
       <p class="label">Holes &amp; penetrations <span class="hint">valve, head, spout, drain</span></p>
       <div class="chips" id="hole-add"></div>
       <div id="hole-list"></div>
-      <p class="field-hint">Measure to the <b>centre of the pipe</b> — across from the left edge of this surface, and up from the floor. Then the cut list tells you where the hole lands <b>on its own tile</b>, which is the number you actually mark. Sizes are starting points: cut to what the valve needs and the escutcheon covers.</p>
+      <p class="field-hint" id="hole-hint">Measure to the <b>centre of the pipe</b> — across from the left edge of this surface, and up from the floor. Then the cut list tells you where the hole lands <b>on its own tile</b>, which is the number you actually mark. Sizes are starting points: cut to what the valve needs and the escutcheon covers.</p>
     </div>
 
     <div class="card">
@@ -1087,6 +1087,13 @@ window.TBstate = {
   var NICHE_KINDS = [['Shampoo niche', 14, 14, 48, 3.5], ['Soap niche', 12, 6, 24, 3.5], ['Custom niche', 12, 12, 40, 3.5]];
   // seeded from trade-standard rough-in heights — starting points, meant to be corrected
   var HOLE_KINDS = [['Valve', 4.5, 48], ['Shower head', 1.25, 78], ['Tub spout', 1.25, 28], ['Body jet', 1.25, 42], ['Drain', 4.5, null], ['Other', 1.25, 36]];
+  /* On a floor the references change: you measure off the BACK wall, and the big one is
+     the closet flange. Rough-in puts its centre 12" out from the finished wall. */
+  var FLOOR_HOLE_KINDS = [['Toilet flange', 7, 12], ['Toilet supply', 1, 8], ['Drain', 4.5, null], ['Pipe riser', 1, 6], ['Other', 1.25, 12]];
+  function holeKinds() { return isFloor() ? FLOOR_HOLE_KINDS : HOLE_KINDS; }
+  // stored y is always off the near edge; a floor shows it off the back wall instead
+  function yIn(a, shown) { return isFloor() ? Math.max(0, a.h - shown) : shown; }
+  function yOut(a, stored) { return isFloor() ? Math.max(0, a.h - stored) : stored; }
   var state = { job: 'shower', surfaces: jobSurfaces('shower'), active: 0, tw: 12, th: 12, grout: 0.125, mode: null };
   function A() { return state.surfaces[state.active] || { t: 'Surface', w: 0, h: 0 }; }
 
@@ -1315,7 +1322,7 @@ window.TBstate = {
     document.getElementById('active-label').innerHTML = a.t + ' &middot; size';
     var ch = document.getElementById('curb-hint');
     if (ch) ch.hidden = !state.surfaces.some(function (s) { return /curb/i.test(s.t); });
-    renderHoles(); renderNiches(); renderTrim(); renderBands(); renderHeat();
+    renderHoleAdd(); renderHoles(); renderNiches(); renderTrim(); renderBands(); renderHeat();
   }
   function renderJobs() {
     var host = document.getElementById('job-type'); host.innerHTML = '';
@@ -1355,18 +1362,18 @@ window.TBstate = {
     if (!a.holes.length) { host.innerHTML = '<p class="hole-empty">No holes on this surface yet.</p>'; return; }
     var head = document.createElement('div');
     head.className = 'hole-head';
-    head.innerHTML = '<span>What</span><span>From left</span><span>Up</span><span>⌀</span><span></span>';
+    head.innerHTML = '<span>What</span><span>From left</span><span>' + (isFloor() ? 'From back' : 'Up') + '</span><span>⌀</span><span></span>';
     host.appendChild(head);
     a.holes.forEach(function (h, i) {
       var row = document.createElement('div'); row.className = 'hole-row';
       row.innerHTML = '<span class="hname">' + h.t + '</span>' +
         '<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(h.x) + '" aria-label="Across from left">' +
-        '<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(h.y) + '" aria-label="Up from floor">' +
+        '<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(yOut(a, h.y)) + '" aria-label="' + (isFloor() ? 'From the back wall' : 'Up from floor') + '">' +
         '<input type="number" step="0.125" min="0" inputmode="decimal" value="' + U.num(h.d) + '" aria-label="Hole diameter">' +
         '<button class="del" type="button" aria-label="Remove hole">×</button>';
       var ins = row.querySelectorAll('input');
       ins[0].addEventListener('input', function () { h.x = U.toIn(parseFloat(ins[0].value) || 0); render(); });
-      ins[1].addEventListener('input', function () { h.y = U.toIn(parseFloat(ins[1].value) || 0); render(); });
+      ins[1].addEventListener('input', function () { h.y = yIn(a, U.toIn(parseFloat(ins[1].value) || 0)); render(); });
       ins[2].addEventListener('input', function () { h.d = U.toIn(parseFloat(ins[2].value) || 0); render(); });
       row.querySelector('.del').addEventListener('click', function () { a.holes.splice(i, 1); renderHoles(); render(); });
       host.appendChild(row);
@@ -1374,17 +1381,21 @@ window.TBstate = {
   }
   function renderHoleAdd() {
     var host = document.getElementById('hole-add'); host.innerHTML = '';
-    HOLE_KINDS.forEach(function (k) {
+    holeKinds().forEach(function (k) {
       var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = '+ ' + k[0];
       b.addEventListener('click', function () {
         var a = A(); if (!a.holes) a.holes = [];
-        // a drain sits mid-surface; everything else takes its rough-in height, centred across
-        var y = k[2] === null ? Math.round(a.h / 2 * 4) / 4 : Math.min(k[2], a.h);
-        a.holes.push({ t: k[0], x: Math.round(a.w / 2 * 4) / 4, y: y, d: k[1] });
+        // a drain sits mid-surface; everything else takes its rough-in figure
+        var shown = k[2] === null ? Math.round(a.h / 2 * 4) / 4 : Math.min(k[2], a.h);
+        a.holes.push({ t: k[0], x: Math.round(a.w / 2 * 4) / 4, y: k[2] === null ? shown : yIn(a, shown), d: k[1] });
         renderHoles(); render();
       });
       host.appendChild(b);
     });
+    var hint = document.getElementById('hole-hint');
+    if (hint) hint.innerHTML = isFloor()
+      ? 'Measure to the <b>centre of the pipe</b> — across from the left edge, and out from the <b>back wall</b>. The cut list then tells you where it lands <b>on its own tile</b>. A closet flange sits <b>on top of the finished tile</b>, not under it, so cut the tile around the pipe and let the flange land over it — set it low and the toilet rocks and leaks.'
+      : 'Measure to the <b>centre of the pipe</b> — across from the left edge of this surface, and up from the floor. Then the cut list tells you where the hole lands <b>on its own tile</b>, which is the number you actually mark. Sizes are starting points: cut to what the valve needs and the escutcheon covers.';
   }
 
   /* ---- niches: a recess is a void in the field AND its own little wall ----
