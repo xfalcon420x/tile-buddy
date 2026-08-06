@@ -821,6 +821,7 @@
       <div class="addrow">
         <button class="btn-ghost" id="add-surf" type="button">+ Add surface</button>
         <button class="btn-ghost" id="add-sub" type="button">− Subtract opening</button>
+        <button class="btn-ghost" id="pull-job" type="button">↧ Pull the job from Layout</button>
       </div>
       <div class="total-line">
         <span class="k">Net area to cover</span>
@@ -840,6 +841,27 @@
         <span>⚑</span>
         <span>Industry-standard starting points. Bump it up for <b>large-format tile</b> or a <b>small, cut-heavy room</b> — that's where waste climbs.</span>
       </div>
+    </div>
+
+    <div class="card">
+      <p class="label">Waterproofing &amp; sundries <span class="hint">sized off the job</span></p>
+      <div class="trim-row"><span class="pv-lbl">Waterproofing</span><div class="chips" id="wp-system"></div></div>
+      <div class="trim-row"><span class="pv-lbl">Grout</span><div class="chips" id="wp-grout"></div></div>
+      <div class="trim-row"><span class="pv-lbl">Floor</span><div class="chips" id="wp-uncoupling"></div></div>
+      <div id="wp-report" class="trim-report"></div>
+      <details class="assume" style="margin-top:14px">
+        <summary>Coverage &amp; counts <span class="mono" style="font-weight:600;color:var(--ink-faint)">tap to tune</span></summary>
+        <div class="assume-body">
+          <div class="assume-field"><div class="af-label">Liquid membrane<small>sq ft per gallon, two coats</small></div><input type="number" id="wp-liqcov" value="50" min="1" step="1" inputmode="numeric"></div>
+          <div class="assume-field"><div class="af-label">Sheet membrane<small>sq ft per roll</small></div><input type="number" id="wp-shtcov" value="54" min="1" step="1" inputmode="numeric"></div>
+          <div class="assume-field"><div class="af-label">Seam band<small>linear ft per roll</small></div><input type="number" id="wp-bandroll" value="33" min="1" step="1" inputmode="numeric"></div>
+          <div class="assume-field"><div class="af-label">Uncoupling membrane<small>sq ft per roll</small></div><input type="number" id="wp-uncov" value="54" min="1" step="1" inputmode="numeric"></div>
+          <div class="assume-field"><div class="af-label">Silicone<small>linear ft per tube</small></div><input type="number" id="wp-silcov" value="25" min="1" step="1" inputmode="numeric"></div>
+          <div class="assume-field"><div class="af-label">Grout sealer<small>sq ft per quart</small></div><input type="number" id="wp-sealcov" value="150" min="1" step="5" inputmode="numeric"></div>
+          <div class="assume-field"><div class="af-label">Backer screws<small>per sheet</small></div><input type="number" id="wp-screws" value="32" min="1" step="1" inputmode="numeric"></div>
+          <p class="assume-note">Every one of these swings by brand. Sheet membrane comes in 54, 108 and 323 sq ft rolls; liquid coverage depends on how thick you pull it, and the label is the number that counts. Corner and seal counts are seeded for a standard alcove — change them to match the actual shower.</p>
+        </div>
+      </details>
     </div>
 
     <div class="card buy" id="buy">
@@ -1743,7 +1765,9 @@ window.TBstate = {
       { type: 'Right wall', w: 36, h: 84, sub: false }
     ],
     pattern: 'straight', waste: 10,
-    boxCov: 15, trowelBase: 75, backbutter: false, thinCov: 75, groutCov: 70, backerSheet: 15
+    boxCov: 15, trowelBase: 75, backbutter: false, thinCov: 75, groutCov: 70, backerSheet: 15,
+    wp: 'liquid', grtType: 'cement', uncoupling: false,
+    liqCov: 50, shtCov: 54, bandRoll: 33, unCov: 54, silCov: 25, sealCov: 150, screws: 32
   };
 
   function applyThinset() {
@@ -1788,6 +1812,88 @@ window.TBstate = {
       host.appendChild(b);
     });
   }
+  /* Waterproofing quantities come OUT of the job rather than being asked for again:
+     wall and floor areas, the corners where planes meet, and one seal per penetration. */
+  function split() {
+    var wall = 0, floor = 0, floorPerim = 0, walls = 0, maxH = 0;
+    state.surfaces.forEach(function (s) {
+      if (s.sub) return;
+      var a = (s.w * s.h) / 144;
+      if (/floor|pan/i.test(s.type)) { floor += a; floorPerim += 2 * (s.w + s.h) / 12; }
+      else { wall += a; walls++; if (s.h > maxH) maxH = s.h; }
+    });
+    return { wall: wall, floor: floor, floorPerim: floorPerim, walls: walls, maxH: maxH };
+  }
+  function holeCount() {          // penetrations already marked on the Layout tab
+    var small = 0, big = 0, T = window.TB || {};
+    (T.surfaces || []).forEach(function (s) {
+      (s.holes || []).forEach(function (h) { if (h.d > 1.5) big++; else small++; });
+    });
+    return { small: small, big: big };
+  }
+  function wpItems() {
+    var S = split(), out = [], area = S.wall + S.floor;
+    if (!(area > 0)) return out;
+    if (state.wp !== 'none') {
+      if (state.wp === 'liquid') {
+        var gal = Math.ceil(area / Math.max(1, state.liqCov));
+        out.push({ name: 'Waterproofing, liquid', sub: area.toFixed(0) + ' sq ft · ~' + state.liqCov + ' sq ft/gal at two coats', qty: gal, unit: gal === 1 ? 'gallon' : 'gallons' });
+      } else {
+        var rolls = Math.ceil(area / Math.max(1, state.shtCov));
+        out.push({ name: 'Waterproofing, sheet', sub: area.toFixed(0) + ' sq ft · ' + state.shtCov + ' sq ft/roll', qty: rolls, unit: rolls === 1 ? 'roll' : 'rolls' });
+      }
+      // vertical corners between walls, plus the whole wall-to-floor junction
+      var bandFt = Math.max(0, S.walls - 1) * (S.maxH / 12) + S.floorPerim;
+      if (bandFt > 0) {
+        var br = Math.ceil(bandFt / Math.max(1, state.bandRoll));
+        out.push({ name: 'Seam band', sub: Math.ceil(bandFt) + ' linear ft of corners and seams · ' + state.bandRoll + ' ft/roll', qty: br, unit: br === 1 ? 'roll' : 'rolls' });
+      }
+      var inC = Math.max(2, S.walls + 1);
+      out.push({ name: 'Preformed corners', sub: inC + ' inside for the pan and wall corners; add outside ones for a curb', qty: inC, unit: 'corners' });
+      var H = holeCount();
+      if (H.small) out.push({ name: 'Pipe seals', sub: 'one per pipe penetration marked on the layout', qty: H.small, unit: H.small === 1 ? 'seal' : 'seals' });
+      if (H.big) out.push({ name: 'Mixing valve seals', sub: 'one per valve opening marked on the layout', qty: H.big, unit: H.big === 1 ? 'seal' : 'seals' });
+      if (S.floor > 0) out.push({ name: 'Bonded drain', sub: 'flange that ties into the membrane', qty: 1, unit: 'drain' });
+    }
+    if (state.uncoupling && S.floor > 0) {
+      var ur = Math.ceil(S.floor / Math.max(1, state.unCov));
+      out.push({ name: 'Uncoupling membrane', sub: S.floor.toFixed(0) + ' sq ft of floor · ' + state.unCov + ' sq ft/roll', qty: ur, unit: ur === 1 ? 'roll' : 'rolls' });
+    }
+    // silicone goes wherever a plane changes — corners and the floor junction, not grout
+    var silFt = Math.max(0, S.walls - 1) * (S.maxH / 12) + S.floorPerim;
+    if (silFt > 0) {
+      var tubes = Math.ceil(silFt / Math.max(1, state.silCov));
+      out.push({ name: 'Silicone', sub: Math.ceil(silFt) + ' linear ft of changes of plane — these move, so they get sealant, not grout', qty: tubes, unit: tubes === 1 ? 'tube' : 'tubes' });
+    }
+    if (state.grtType === 'cement') {
+      var qt = Math.ceil(area / Math.max(1, state.sealCov));
+      out.push({ name: 'Grout sealer', sub: 'cement grout wants sealing · ~' + state.sealCov + ' sq ft/quart', qty: qt, unit: qt === 1 ? 'quart' : 'quarts' });
+    }
+    return out;
+  }
+  function renderWP() {
+    var chips = function (id, opts, get, set) {
+      var host = document.getElementById(id); if (!host) return;
+      host.innerHTML = '';
+      opts.forEach(function (o) {
+        var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = o[1];
+        b.setAttribute('aria-pressed', get() === o[0] ? 'true' : 'false');
+        b.addEventListener('click', function () { set(o[0]); renderWP(); compute(); });
+        host.appendChild(b);
+      });
+    };
+    chips('wp-system', [['liquid', 'Liquid'], ['sheet', 'Sheet'], ['none', 'None']], function () { return state.wp; }, function (v) { state.wp = v; });
+    chips('wp-grout', [['cement', 'Cement'], ['epoxy', 'Epoxy']], function () { return state.grtType; }, function (v) { state.grtType = v; });
+    chips('wp-uncoupling', [['no', 'No membrane'], ['yes', 'Uncoupling']], function () { return state.uncoupling ? 'yes' : 'no'; }, function (v) { state.uncoupling = v === 'yes'; });
+    var S = split(), el = document.getElementById('wp-report');
+    if (!el) return;
+    el.innerHTML = state.wp === 'none'
+      ? '<span class="muted">No waterproofing counted. A shower needs it — this is only right for a dry floor or a backsplash.</span>'
+      : 'Waterproofing <b>' + (S.wall + S.floor).toFixed(0) + ' sq ft</b> (' + S.wall.toFixed(0) + ' of wall, ' + S.floor.toFixed(0) + ' of floor). ' +
+        'Seals are counted from the holes you marked on the Layout tab.' +
+        (state.grtType === 'epoxy' ? ' Epoxy grout needs no sealer.' : '');
+  }
+
   function netArea() { var a = 0; state.surfaces.forEach(function (s) { a += (s.sub ? -1 : 1) * sqft(s); }); return Math.max(0, a); }
 
   function compute() {
@@ -1804,6 +1910,7 @@ window.TBstate = {
       { name: 'Grout', sub: '25 lb bags · covers ~' + state.groutCov + ' sq ft each', qty: grout, unit: grout === 1 ? 'bag' : 'bags' },
       { name: 'Backer board', sub: 'sheets · ' + state.backerSheet + ' sq ft each', qty: backer, unit: backer === 1 ? 'sheet' : 'sheets' }
     ];
+    items = items.concat(wpItems());
     var host = document.getElementById('buy-items'); host.innerHTML = '';
     items.forEach(function (it) {
       var d = document.createElement('div');
@@ -1812,6 +1919,16 @@ window.TBstate = {
         '<div class="qty mono">' + it.qty + '<small>' + it.unit + '</small></div>';
       host.appendChild(d);
     });
+    var scr = backer * state.screws;
+    if (backer > 0) {
+      var host2 = document.getElementById('buy-items');
+      var d = document.createElement('div');
+      d.className = 'item';
+      d.innerHTML = '<div><div class="name">Backer screws</div><div class="sub">' + state.screws + ' per sheet</div></div>' +
+        '<div class="qty mono">' + scr + '<small>screws</small></div>';
+      host2.appendChild(d);
+    }
+    renderWP();
     renderQuote(net, boxes, thin, grout, backer);
   }
 
@@ -1842,12 +1959,31 @@ window.TBstate = {
       window.dispatchEvent(new Event('tb-change'));
     });
   })();
+  // the job is described once on the Layout tab; don't make anyone type it twice
+  document.getElementById('pull-job').addEventListener('click', function () {
+    var T = window.TB || {};
+    if (!T.surfaces || !T.surfaces.length) return;
+    state.surfaces = T.surfaces.filter(function (s) { return s.w > 0 && s.h > 0; }).map(function (s) {
+      var t = /floor|pan/i.test(s.type) ? 'Floor / pan'
+            : /curb/i.test(s.type) ? 'Curb'
+            : /ceiling/i.test(s.type) ? 'Ceiling'
+            : SURFACE_TYPES.indexOf(s.type) >= 0 ? s.type : 'Other';
+      return { type: t, w: s.w, h: s.h, sub: false };
+    });
+    renderSurfaces(); compute();
+  });
   document.getElementById('add-surf').addEventListener('click', function () { state.surfaces.push({ type: 'Other', w: 0, h: 0, sub: false }); renderSurfaces(); compute(); });
   document.getElementById('add-sub').addEventListener('click', function () { state.surfaces.push({ type: 'Other', w: 0, h: 0, sub: true }); renderSurfaces(); compute(); });
   document.getElementById('waste').addEventListener('input', function (e) { state.waste = parseFloat(e.target.value) || 0; compute(); });
   document.getElementById('trowel').addEventListener('change', function (e) { state.trowelBase = parseFloat(e.target.value) || 75; applyThinset(); compute(); });
   document.getElementById('backbutter').addEventListener('change', function (e) { state.backbutter = e.target.checked; applyThinset(); compute(); });
   document.getElementById('tilesize').addEventListener('change', function (e) { state.groutCov = parseFloat(e.target.value) || 70; document.getElementById('grout-cov').value = state.groutCov; compute(); });
+  [['wp-liqcov', 'liqCov'], ['wp-shtcov', 'shtCov'], ['wp-bandroll', 'bandRoll'], ['wp-uncov', 'unCov'],
+   ['wp-silcov', 'silCov'], ['wp-sealcov', 'sealCov'], ['wp-screws', 'screws']].forEach(function (pair) {
+    var el = document.getElementById(pair[0]);
+    if (el) el.addEventListener('input', function (e) { state[pair[1]] = parseFloat(e.target.value) || 0; compute(); });
+  });
+  window.addEventListener('tb-change', function () { compute(); });   // holes drive the seal counts
   [['box-cov', 'boxCov'], ['thin-cov', 'thinCov'], ['grout-cov', 'groutCov'], ['backer-sheet', 'backerSheet']].forEach(function (pair) {
     document.getElementById(pair[0]).addEventListener('input', function (e) { state[pair[1]] = parseFloat(e.target.value) || 0; compute(); });
   });
@@ -1874,7 +2010,7 @@ window.TBstate = {
     document.querySelectorAll('.area-label').forEach(function (el) { el.textContent = window.TBU.areaLabel(); });
     renderSurfaces(); compute();
   });
-  renderSurfaces(); renderPatterns(); compute();
+  renderSurfaces(); renderPatterns(); renderWP(); compute();
 })();
 
 /* ============ PATTERN gallery (Layout tab) ============ */
