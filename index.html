@@ -106,6 +106,18 @@
   /* ---------- room mapper ---------- */
   .map-svg { width: 100%; display: block; border-radius: 8px; background: var(--ground); }
   .map-unit { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  /* section rhythm — a long scroll needs landmarks, and it must be obvious
+     which settings hit the whole job and which only touch the surface you picked */
+  .sect { display: flex; align-items: baseline; gap: 9px; margin: 26px 2px 2px; flex-wrap: wrap; }
+  .sect:first-of-type { margin-top: 6px; }
+  .sect-n { width: 21px; height: 21px; flex: none; display: grid; place-items: center; border-radius: 50%;
+            background: var(--chalk); color: #fff; font-size: .68rem; font-weight: 800;
+            font-family: ui-monospace, Menlo, monospace; align-self: center; }
+  .sect-t { font-family: var(--serif); font-size: 1.18rem; font-weight: 600; letter-spacing: -.01em; }
+  .sect-h { font-size: .78rem; color: var(--ink-faint); font-style: italic; }
+  .scoped { position: relative; padding-left: 11px; display: flex; flex-direction: column; gap: 18px; }
+  .scoped::before { content: ""; position: absolute; left: 0; top: 4px; bottom: 4px; width: 2px;
+                    border-radius: 2px; background: linear-gradient(var(--chalk), transparent); opacity: .5; }
   .unitbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: -6px; }
   .unitbar .seg button { padding: 7px 13px; font-size: .84rem; }
   #tile-swap { padding: 10px 12px; font-size: 1.05rem; line-height: 1; border-style: solid; }
@@ -549,6 +561,7 @@
 
   <!-- ============ LAYOUT ============ -->
   <section id="panel-layout" class="panel" role="tabpanel">
+    <div class="sect"><span class="sect-n">1</span><span class="sect-t">The job</span><span class="sect-h">what you're tiling</span></div>
     <div class="card">
       <p class="label">What are you tiling?</p>
       <div class="chips" id="job-type"></div>
@@ -565,6 +578,40 @@
       <p class="field-hint" id="curb-hint" hidden>A curb is three faces — <b>top, outside, inside</b> — added together and sharing a length. Pitch the top <b>1/8″ toward the inside</b> so water drains back in, and keep the front and side pieces parallel to that pitch. Walls usually go first, so trim the curb length about <b>3/8″ at each end</b> to drop in between the tiled walls.</p>
     </div>
 
+    <div class="sect"><span class="sect-n">2</span><span class="sect-t">The tile</span><span class="sect-h">every surface uses this</span></div>
+    <div class="card">
+      <div class="field">
+        <p class="label">Tile size <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-faint)">(across × up, as it sits)</span></p>
+        <div class="row">
+          <input type="text" id="tile" value="12" inputmode="decimal" autocomplete="off" aria-label="Tile width">
+          <span class="unit">&times;</span>
+          <input type="text" id="tile-h" value="12" inputmode="decimal" autocomplete="off" aria-label="Tile height">
+          <span class="unit unit-label">in</span>
+          <button class="btn-ghost" id="tile-swap" type="button" title="Turn the tile 90°" aria-label="Turn the tile 90 degrees">&#8635;</button>
+        </div>
+        <div class="chips" id="tile-chips"></div>
+        <p class="field-hint">Type the <b>real measured size</b> — a &ldquo;12&Prime;&rdquo; tile is often 11 7/8 or 11 3/4. Fractions work: <span class="mono">11 7/8</span>. For planks (12&times;24, 6&times;24) set both, and <b>&#8635;</b> turns it 90&deg;.</p>
+      </div>
+      <div class="field">
+        <p class="label">Grout joint</p>
+        <div class="chips" id="grout-chips"></div>
+      </div>
+    </div>
+    <div class="card">
+      <p class="label">Pattern <span class="hint">see the layouts</span></p>
+      <div class="pat-gallery" id="pat-gallery"></div>
+      <div class="pat-preview">
+        <svg id="pat-preview-svg" viewBox="0 0 48 48" aria-hidden="true"></svg>
+        <div>
+          <div class="pname" id="pat-name">—</div>
+          <div class="pdesc" id="pat-desc"></div>
+          <div class="pwaste" id="pat-waste"></div>
+        </div>
+      </div>
+      <p class="pat-note">The dry lay below sizes cuts for the <b>straight &amp; offset</b> family (straight, running bond, thirds, vertical). Herringbone and the angled patterns lay differently — their cut math is on the way.</p>
+    </div>
+    <div class="sect" id="sect-surface"><span class="sect-n">3</span><span class="sect-t">This surface</span><span class="sect-h" id="sect-surface-name"></span></div>
+    <div class="scoped">
     <div class="card">
       <p class="label" id="active-label">Back wall &middot; size</p>
       <div class="field">
@@ -592,22 +639,6 @@
         </div>
         <p class="field-hint" id="sq-report">Hook the tape on the <b>same left corner</b> and measure across at the bottom, then again at the top. Leave blank if it's square. Any difference and the pieces down that edge become <b>scribe cuts</b> — the app gives you both ends of each one.</p>
       </div>
-      <div class="field">
-        <p class="label">Tile size <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-faint)">(across × up, as it sits)</span></p>
-        <div class="row">
-          <input type="text" id="tile" value="12" inputmode="decimal" autocomplete="off" aria-label="Tile width">
-          <span class="unit">&times;</span>
-          <input type="text" id="tile-h" value="12" inputmode="decimal" autocomplete="off" aria-label="Tile height">
-          <span class="unit unit-label">in</span>
-          <button class="btn-ghost" id="tile-swap" type="button" title="Turn the tile 90°" aria-label="Turn the tile 90 degrees">&#8635;</button>
-        </div>
-        <div class="chips" id="tile-chips"></div>
-        <p class="field-hint">Type the <b>real measured size</b> — a &ldquo;12&Prime;&rdquo; tile is often 11 7/8 or 11 3/4. Fractions work: <span class="mono">11 7/8</span>. For planks (12&times;24, 6&times;24) set both, and <b>&#8635;</b> turns it 90&deg;.</p>
-      </div>
-      <div class="field">
-        <p class="label">Grout joint</p>
-        <div class="chips" id="grout-chips"></div>
-      </div>
     </div>
 
     <div class="card">
@@ -623,6 +654,13 @@
       <div id="niche-list"></div>
       <p class="field-hint">Measure to the <b>opening</b> — across from the left edge, up from the floor to the sill. The trade rule is to <b>land the opening on grout lines</b>: do that and the inside tiles out in full pieces with no slivers at the edge. Pitch the sill <b>1/8″</b> into the shower so it drains.</p>
     </div>
+    <div class="card">
+      <p class="label">Accent bands <span class="hint">a feature row across the wall</span></p>
+      <div class="chips" id="band-add"></div>
+      <div id="band-list"></div>
+      <p class="field-hint">A band cuts the wall in two: the courses below run up off the floor, and the courses above start a <b>fresh full course off the top of the band</b> — which is how it's actually set.</p>
+    </div>
+
 
     <div class="card">
       <p class="label">Edge trim <span class="hint">decide this early — it changes the field</span></p>
@@ -661,26 +699,8 @@
       <p class="field-hint">The cable <b>cannot be cut shorter</b> — so you size the mat to the heated area and go <b>under</b>, never over. Keep it back from the walls, out from under the tub, vanity and toilet, and drop the floor sensor <b>between two cable runs</b>, not across one.</p>
     </div>
 
-    <div class="card">
-      <p class="label">Accent bands <span class="hint">a feature row across the wall</span></p>
-      <div class="chips" id="band-add"></div>
-      <div id="band-list"></div>
-      <p class="field-hint">A band cuts the wall in two: the courses below run up off the floor, and the courses above start a <b>fresh full course off the top of the band</b> — which is how it's actually set.</p>
     </div>
-
-    <div class="card">
-      <p class="label">Pattern <span class="hint">see the layouts</span></p>
-      <div class="pat-gallery" id="pat-gallery"></div>
-      <div class="pat-preview">
-        <svg id="pat-preview-svg" viewBox="0 0 48 48" aria-hidden="true"></svg>
-        <div>
-          <div class="pname" id="pat-name">—</div>
-          <div class="pdesc" id="pat-desc"></div>
-          <div class="pwaste" id="pat-waste"></div>
-        </div>
-      </div>
-      <p class="pat-note">The dry lay below sizes cuts for the <b>straight &amp; offset</b> family (straight, running bond, thirds, vertical). Herringbone and the angled patterns lay differently — their cut math is on the way.</p>
-    </div>
+    <div class="sect"><span class="sect-n">4</span><span class="sect-t">The layout</span><span class="sect-h">where it starts and every cut</span></div>
 
     <div class="card verdict" id="verdict">
       <p class="headline" id="headline">—</p>
@@ -722,6 +742,7 @@
     </div>
 
     <div class="card">
+    <div class="sect"><span class="sect-n">5</span><span class="sect-t">The whole job</span><span class="sect-h">every surface added up</span></div>
       <p class="label">Whole job <span class="hint">every surface added up</span></p>
       <div id="job-total" class="cutlist"></div>
     </div>
@@ -1320,8 +1341,14 @@ window.TBstate = {
     document.getElementById('lbl-width').textContent = 'Width';
     document.getElementById('lbl-height').textContent = /floor|pan/i.test(a.t) ? 'Depth' : 'Height';
     document.getElementById('active-label').innerHTML = a.t + ' &middot; size';
+    var sn = document.getElementById('sect-surface-name');
+    if (sn) sn.textContent = a.t + (isFloor() ? ' — a floor' : /curb/i.test(a.t) ? ' — a curb face' : ' — a wall');
     var ch = document.getElementById('curb-hint');
     if (ch) ch.hidden = !state.surfaces.some(function (s) { return /curb/i.test(s.t); });
+    // niches and bands are wall features; a floor has neither
+    var wallLike = !isFloor() && !/curb/i.test(a.t);
+    var nc = document.getElementById('niche-add'); if (nc) nc.closest('.card').hidden = !wallLike;
+    var bc = document.getElementById('band-add'); if (bc) bc.closest('.card').hidden = !wallLike;
     renderHoleAdd(); renderHoles(); renderNiches(); renderTrim(); renderBands(); renderHeat();
   }
   function renderJobs() {
