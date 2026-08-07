@@ -386,6 +386,7 @@
   .trim-report { margin-top: 12px; font-size: .8rem; color: var(--chalk-deep); line-height: 1.5; }
   .trim-report b { font-family: ui-monospace, Menlo, monospace; font-weight: 700; }
   .trim-report .muted { color: var(--ink-faint); }
+  .niche-item.sel { border-color: var(--chalk); box-shadow: 0 0 0 2px var(--chalk-wash); }
   .band-item { border: 1.5px solid var(--panel-edge); border-radius: 11px; padding: 11px 12px; margin-top: 10px; background: var(--ground); }
   .band-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .band-grid label { display: flex; flex-direction: column; gap: 3px; font-size: .6rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); font-weight: 600; text-align: center; }
@@ -825,12 +826,34 @@
   <section id="panel-map" class="panel" role="tabpanel" hidden>
     <div class="card">
       <p class="label">Walk the walls <span class="hint">start in a corner, go around</span></p>
-      <div class="chips" id="map-presets"></div>
+      <div class="trim-row" style="margin-top:0"><span class="pv-lbl">Draw it by</span>
+        <div class="seg" id="map-mode">
+          <button type="button" data-m="boxes" aria-pressed="true">Boxes</button>
+          <button type="button" data-m="walls" aria-pressed="false">Walking the walls</button>
+        </div>
+      </div>
+
+      <div id="map-boxes-ui">
+        <div class="trim-row"><span class="pv-lbl">The main room</span>
+          <input type="number" id="room-w" step="0.5" min="1" inputmode="decimal" value="144">
+          <span class="unit">&times;</span>
+          <input type="number" id="room-d" step="0.5" min="1" inputmode="decimal" value="120">
+          <span class="unit unit-label">in</span>
+        </div>
+        <div class="dgm" data-dgm="room"></div>
+        <p class="label" style="margin:16px 0 8px">Add or take away <span class="hint">closets, bump-outs, chases</span></p>
+        <div class="chips" id="box-add"></div>
+        <div id="box-list"></div>
+      </div>
+
+      <div id="map-walls-ui" hidden>
+        <div class="chips" id="map-presets"></div>
       <div class="map-head"><span>#</span><span>Which way</span><span>How far</span><span></span></div>
       <div id="map-segs"></div>
       <div class="addrow">
         <button class="btn-ghost" id="map-add" type="button">+ Wall</button>
         <button class="btn-ghost" id="map-fit" type="button">Close the loop</button>
+      </div>
       </div>
       <div id="map-status" class="map-status"></div>
     </div>
@@ -1359,6 +1382,29 @@ window.TBstate = {
     });
   })();
   // a unit switch changes nothing about the job — only how it reads
+  (function () {
+    var seg = document.getElementById('map-mode');
+    if (!seg) return;
+    seg.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        state.mode = b.dataset.m;
+        seg.querySelectorAll('button').forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+        document.getElementById('map-boxes-ui').hidden = state.mode !== 'boxes';
+        document.getElementById('map-walls-ui').hidden = state.mode === 'boxes';
+        doneCuts = {}; activeCut = null;
+        sync();
+      });
+    });
+    [['room-w', 'w'], ['room-d', 'd']].forEach(function (pair) {
+      var el = document.getElementById(pair[0]);
+      if (el) el.addEventListener('input', function () { state.main[pair[1]] = window.TBU.toIn(parseFloat(el.value) || 0); sync(); });
+    });
+  })();
+  function showMain() {
+    var a = document.getElementById('room-w'), b = document.getElementById('room-d');
+    if (a) a.value = window.TBU.num(state.main.w);
+    if (b) b.value = window.TBU.num(state.main.d);
+  }
   window.addEventListener('tb-units', function () { showSize(); showTile(); renderSurfList(); renderHoles(); renderNiches(); renderTrim(); renderBands(); renderHeat(); sync(); });
 
   // ---- job type + surfaces list ----
@@ -2072,6 +2118,29 @@ window.TBstate = {
     renderSurfaces(); renderPatterns(); compute();
   });
 
+  (function () {
+    var seg = document.getElementById('map-mode');
+    if (!seg) return;
+    seg.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        state.mode = b.dataset.m;
+        seg.querySelectorAll('button').forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+        document.getElementById('map-boxes-ui').hidden = state.mode !== 'boxes';
+        document.getElementById('map-walls-ui').hidden = state.mode === 'boxes';
+        doneCuts = {}; activeCut = null;
+        sync();
+      });
+    });
+    [['room-w', 'w'], ['room-d', 'd']].forEach(function (pair) {
+      var el = document.getElementById(pair[0]);
+      if (el) el.addEventListener('input', function () { state.main[pair[1]] = window.TBU.toIn(parseFloat(el.value) || 0); sync(); });
+    });
+  })();
+  function showMain() {
+    var a = document.getElementById('room-w'), b = document.getElementById('room-d');
+    if (a) a.value = window.TBU.num(state.main.w);
+    if (b) b.value = window.TBU.num(state.main.d);
+  }
   window.addEventListener('tb-units', function () {
     document.querySelectorAll('.area-label').forEach(function (el) { el.textContent = window.TBU.areaLabel(); });
     renderSurfaces(); compute();
@@ -3283,7 +3352,102 @@ window.TBstate = {
     galley: [['R', 96], ['D', 60], ['L', 96], ['U', 60]]
   };
   function seed(k) { return PRESETS[k].map(function (s) { return { dir: s[0], len: s[1], ang: 0 }; }); }
-  var state = { origin: 'center', nx: 0, ny: 0, preset: 'L', segs: seed('L') };
+  var state = { mode: 'boxes', origin: 'center', nx: 0, ny: 0, preset: 'L', segs: seed('L'),
+                main: { w: 144, d: 120 }, boxes: [], sel: -1 };
+  /* A room is a rectangle with things stuck on or cut out of it — a closet, a bump-out,
+     a chase in the corner. That is how people describe rooms, and it is exact: every box
+     carries its own numbers, so nothing compounds the way a walked traverse does. */
+  var BOX_KINDS = [['Closet', 0, 24, 60], ['Bump-out', 0, 18, 48], ['Chase', 1, 12, 12],
+                   ['Cabinet run', 1, 24, 72], ['Add a box', 0, 24, 24], ['Take a box out', 1, 24, 24]];
+  function boxRect(b) {                    // → {x,y,w,h} in room coordinates
+    var W = state.main.w, H = state.main.d, a = b.along, wd = b.w, dp = b.d;
+    if (b.side === 'top')    return { x: a, y: b.sub ? 0 : -dp, w: wd, h: dp };
+    if (b.side === 'bottom') return { x: a, y: b.sub ? H - dp : H, w: wd, h: dp };
+    if (b.side === 'left')   return { x: b.sub ? 0 : -dp, y: a, w: dp, h: wd };
+    return { x: b.sub ? W - dp : W, y: a, w: dp, h: wd };                    // right
+  }
+  function roomRects() {
+    var out = [{ x: 0, y: 0, w: state.main.w, h: state.main.d, sub: false }];
+    state.boxes.forEach(function (b) {
+      if (!(b.w > 0) || !(b.d > 0)) return;
+      var r = boxRect(b); r.sub = !!b.sub; out.push(r);
+    });
+    return out;
+  }
+  /* Turn those overlapping rectangles into one outline. Every rectangle edge becomes a
+     grid line; each cell is inside if some added box covers it and no subtracted one does;
+     then walk the boundary edges into a loop. Exact for axis-aligned shapes — no floating
+     point union library, and the result drops straight into the tiler we already have. */
+  function polyFromRects(rects) {
+    var xs = [], ys = [];
+    rects.forEach(function (r) { xs.push(r.x, r.x + r.w); ys.push(r.y, r.y + r.h); });
+    xs = xs.filter(function (v, i, a) { return a.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
+    ys = ys.filter(function (v, i, a) { return a.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
+    if (xs.length < 2 || ys.length < 2) return [];
+    var nx = xs.length - 1, ny = ys.length - 1, inside = [];
+    for (var j = 0; j < ny; j++) {
+      inside[j] = [];
+      for (var i = 0; i < nx; i++) {
+        var cx = (xs[i] + xs[i + 1]) / 2, cy = (ys[j] + ys[j + 1]) / 2, on = false;
+        rects.forEach(function (r) {
+          if (cx > r.x && cx < r.x + r.w && cy > r.y && cy < r.y + r.h) on = r.sub ? false : (r.sub ? on : true);
+        });
+        // subtractions win wherever they land
+        rects.forEach(function (r) {
+          if (r.sub && cx > r.x && cx < r.x + r.w && cy > r.y && cy < r.y + r.h) on = false;
+        });
+        inside[j][i] = on;
+      }
+    }
+    function IN(i, j) { return i >= 0 && j >= 0 && i < nx && j < ny && inside[j][i]; }
+    var edges = {};
+    function add(x1, y1, x2, y2) { edges[x1 + ',' + y1] = [x2, y2]; }
+    for (var j2 = 0; j2 < ny; j2++) for (var i2 = 0; i2 < nx; i2++) {
+      if (!inside[j2][i2]) continue;
+      var x0 = xs[i2], x1 = xs[i2 + 1], y0 = ys[j2], y1 = ys[j2 + 1];
+      if (!IN(i2, j2 - 1)) add(x0, y0, x1, y0);       // clockwise on screen
+      if (!IN(i2 + 1, j2)) add(x1, y0, x1, y1);
+      if (!IN(i2, j2 + 1)) add(x1, y1, x0, y1);
+      if (!IN(i2 - 1, j2)) add(x0, y1, x0, y0);
+    }
+    var keys = Object.keys(edges);
+    if (!keys.length) return [];
+    var start = keys[0].split(',').map(Number), pts = [], cur = start, guard = 0;
+    do {
+      pts.push({ x: cur[0], y: cur[1] });
+      var nxt = edges[cur[0] + ',' + cur[1]];
+      if (!nxt) break;
+      cur = nxt;
+    } while ((cur[0] !== start[0] || cur[1] !== start[1]) && guard++ < 20000);
+    // drop the points that sit mid-run on a straight stretch
+    var out = [];
+    for (var k = 0; k < pts.length; k++) {
+      var a = pts[(k - 1 + pts.length) % pts.length], b = pts[k], c = pts[(k + 1) % pts.length];
+      var cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+      if (Math.abs(cross) > 1e-9) out.push(b);
+    }
+    return out.length >= 3 ? out : pts;
+  }
+  function boxesPoly() {
+    var p = polyFromRects(roomRects());
+    if (!p.length) return [];
+    var mx = Math.min.apply(null, p.map(function (v) { return v.x; }));
+    var my = Math.min.apply(null, p.map(function (v) { return v.y; }));
+    return p.map(function (v) { return { x: v.x - mx, y: v.y - my }; });   // origin at 0,0
+  }
+  /* An added box sits OUTSIDE the room by design — it only ever touches along its wall.
+     So the question is not "does it overlap" but "does it still land on that wall's run".
+     Slide it past the corner and it floats off on its own. */
+  function orphanCount() {
+    var W = state.main.w, H = state.main.d, n = 0;
+    state.boxes.forEach(function (b) {
+      if (!(b.w > 0) || !(b.d > 0)) return;
+      var span = (b.side === 'top' || b.side === 'bottom') ? W : H;
+      var lo = Math.max(0, b.along), hi = Math.min(span, b.along + b.w);
+      if (hi - lo <= 1e-9) n++;
+    });
+    return n;
+  }
   var doneCuts = {}, activeCut = null;
 
   /* ---- formatting ---- */
@@ -3359,9 +3523,15 @@ window.TBstate = {
   }
   function gap() { var v = verts(), a = v[0], b = v[v.length - 1]; return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)); }
   function room() {  // closed polygon for tiling (drops a duplicate end point)
+    if (state.mode === 'boxes') return boxesPoly();
     var v = verts();
     if (v.length > 2 && gap() < 0.02) v = v.slice(0, -1);
     return v;
+  }
+  function outlineVerts() {          // what draw() strokes as the room outline
+    if (state.mode !== 'boxes') return verts();
+    var p = boxesPoly();
+    return p.length ? p.concat([p[0]]) : [];
   }
 
   /* ---- tile cells over the bounding box ---- */
@@ -3438,7 +3608,7 @@ window.TBstate = {
   function draw(R) {
     suppressed = false;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
-    var v = verts(), bb = bboxOf([v]);
+    var v = outlineVerts(), bb = bboxOf([v.length ? v : [{ x: 0, y: 0 }, { x: 1, y: 1 }]]);
     var W = Math.max(1, bb.x1 - bb.x0), H = Math.max(1, bb.y1 - bb.y0), pad = Math.max(W, H) * 0.17;
     svg.setAttribute('viewBox', (bb.x0 - pad) + ' ' + (bb.y0 - pad) + ' ' + (W + 2 * pad) + ' ' + (H + 2 * pad));
     var pxW = svg.clientWidth || 480;
@@ -3494,17 +3664,23 @@ window.TBstate = {
         stroke: 'var(--warn)', 'stroke-width': (unitPx * 2.5).toFixed(2), 'stroke-dasharray': (unitPx * 7) + ' ' + (unitPx * 6) });
     }
     var fs2 = unitPx * 11;
-    state.segs.forEach(function (s, i) {
+    var runs = state.mode === 'boxes'
+      ? v.slice(0, -1).map(function (p, i) { var q = v[i + 1]; return { len: Math.abs(q.x - p.x) + Math.abs(q.y - p.y) }; })
+      : state.segs;
+    runs.forEach(function (s, i) {
       var a = v[i], b = v[i + 1]; if (!b || !s.len) return;
       var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
       var dx = b.x - a.x, dy = b.y - a.y, L = Math.sqrt(dx * dx + dy * dy) || 1;
-      var ox = -dy / L * fs2 * 1.5, oy = dx / L * fs2 * 1.5;
+      // short walls sit close together at a corner, so their labels need pushing
+      // further clear or they land on top of each other
+      var k = 1.5 + Math.min(1.6, (fs2 * 7) / Math.max(fs2, L));
+      var ox = -dy / L * fs2 * k, oy = dx / L * fs2 * k;
       var cen = { x: (bb.x0 + bb.x1) / 2, y: (bb.y0 + bb.y1) / 2 };
       if ((mx + ox - cen.x) * (mx - cen.x) + (my + oy - cen.y) * (my - cen.y) < (mx - cen.x) * (mx - cen.x) + (my - cen.y) * (my - cen.y)) { ox = -ox; oy = -oy; }
       add('text', { x: (mx + ox).toFixed(1), y: (my + oy).toFixed(1), 'text-anchor': 'middle', 'dominant-baseline': 'central',
         'font-size': fs2.toFixed(1), fill: 'var(--ink-soft)', 'font-family': 'ui-monospace,Menlo,monospace', 'font-weight': '600' }, fmtLen(s.len));
     });
-    add('circle', { cx: v[0].x, cy: v[0].y, r: (unitPx * 4.5).toFixed(2), fill: 'var(--chalk)' });
+    if (v.length) add('circle', { cx: v[0].x, cy: v[0].y, r: (unitPx * 4.5).toFixed(2), fill: 'var(--chalk)' });
   }
 
   /* ---- cut list ---- */
@@ -3555,6 +3731,52 @@ window.TBstate = {
       }
     });
   }
+  var SIDES = [['top', 'Top'], ['right', 'Right'], ['bottom', 'Bottom'], ['left', 'Left']];
+  function renderBoxAdd() {
+    var host = document.getElementById('box-add'); if (!host) return;
+    host.innerHTML = '';
+    BOX_KINDS.forEach(function (k) {
+      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button';
+      b.textContent = (k[1] ? '− ' : '+ ') + k[0];
+      b.addEventListener('click', function () {
+        state.boxes.push({ t: k[0], sub: !!k[1], side: 'left', along: 0, w: k[3], d: k[2] });
+        state.sel = state.boxes.length - 1;
+        renderBoxes(); sync();
+      });
+      host.appendChild(b);
+    });
+  }
+  function renderBoxes() {
+    var host = document.getElementById('box-list'); if (!host) return;
+    var U = window.TBU;
+    host.innerHTML = '';
+    if (!state.boxes.length) { host.innerHTML = '<p class="niche-empty">Just a plain rectangle. Add a closet or take out a chase.</p>'; return; }
+    state.boxes.forEach(function (b, i) {
+      var box = document.createElement('div'); box.className = 'niche-item' + (state.sel === i ? ' sel' : '');
+      var sides = SIDES.map(function (sd) {
+        return '<button class="map-dir" type="button" data-s="' + sd[0] + '" aria-pressed="' + (b.side === sd[0] ? 'true' : 'false') + '">' + sd[1] + '</button>';
+      }).join('');
+      box.innerHTML =
+        '<div class="niche-top"><span class="hname">' + (b.sub ? '− ' : '+ ') + b.t + '</span>' +
+        '<button class="del" type="button" aria-label="Remove">×</button></div>' +
+        '<div class="map-dirs" style="margin-bottom:8px">' + sides + '</div>' +
+        '<div class="band-grid">' +
+        '<label>Along the wall<input type="number" step="0.5" min="0" inputmode="decimal" value="' + U.num(b.along) + '"></label>' +
+        '<label>Wide<input type="number" step="0.5" min="0" inputmode="decimal" value="' + U.num(b.w) + '"></label>' +
+        '<label>' + (b.sub ? 'Cuts in' : 'Sticks out') + '<input type="number" step="0.5" min="0" inputmode="decimal" value="' + U.num(b.d) + '"></label>' +
+        '</div>';
+      box.querySelectorAll('.map-dir').forEach(function (btn) {
+        btn.addEventListener('click', function () { b.side = btn.dataset.s; state.sel = i; renderBoxes(); sync(); });
+      });
+      var ins = box.querySelectorAll('.band-grid input');
+      ['along', 'w', 'd'].forEach(function (k, j) {
+        ins[j].addEventListener('input', function () { b[k] = window.TBU.toIn(parseFloat(ins[j].value) || 0); state.sel = i; sync(); });
+      });
+      box.querySelector('.del').addEventListener('click', function () { state.boxes.splice(i, 1); state.sel = -1; renderBoxes(); sync(); });
+      box.addEventListener('click', function () { if (state.sel !== i) { state.sel = i; renderBoxes(); sync(); } });
+      host.appendChild(box);
+    });
+  }
   function renderPresets() {
     var host = document.getElementById('map-presets'); host.innerHTML = '';
     [['rect', 'Rectangle'], ['L', 'L-shaped'], ['U', 'U-shaped'], ['galley', 'Galley']].forEach(function (p) {
@@ -3565,6 +3787,14 @@ window.TBstate = {
     });
   }
   function status() {
+    if (state.mode === 'boxes') {
+      var p = boxesPoly(), orph = orphanCount();
+      if (p.length < 3) { statusEl.className = 'map-status gap'; statusEl.innerHTML = '<span>⚠</span><span>Give the main room a width and a depth.</span>'; return; }
+      if (orph) { statusEl.className = 'map-status gap'; statusEl.innerHTML = '<span>⚠</span><span>' + orph + ' box' + (orph === 1 ? ' is' : 'es are') + ' floating clear of the room — slide it back against a wall.</span>'; return; }
+      statusEl.className = 'map-status ok';
+      statusEl.innerHTML = '<span>✓</span><span>' + p.length + ' corners · ' + (polyArea(p) / 144).toFixed(1) + ' sq ft.</span>';
+      return;
+    }
     var g = gap(), n = state.segs.length;
     if (n < 3) { statusEl.className = 'map-status gap'; statusEl.innerHTML = '<span>⚠</span><span>A room needs at least 3 walls.</span>'; return; }
     if (g < 0.02) { statusEl.className = 'map-status ok'; statusEl.innerHTML = '<span>✓</span><span>Closes clean — ' + n + ' walls.</span>'; }
@@ -3609,9 +3839,32 @@ window.TBstate = {
     state.segs.push(named ? { dir: named[0], len: L, ang: 0 } : { dir: 'A', len: L, ang: ang });
     state.preset = null; renderPresets(); renderSegs(); sync();
   });
+  (function () {
+    var seg = document.getElementById('map-mode');
+    if (!seg) return;
+    seg.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        state.mode = b.dataset.m;
+        seg.querySelectorAll('button').forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+        document.getElementById('map-boxes-ui').hidden = state.mode !== 'boxes';
+        document.getElementById('map-walls-ui').hidden = state.mode === 'boxes';
+        doneCuts = {}; activeCut = null;
+        sync();
+      });
+    });
+    [['room-w', 'w'], ['room-d', 'd']].forEach(function (pair) {
+      var el = document.getElementById(pair[0]);
+      if (el) el.addEventListener('input', function () { state.main[pair[1]] = window.TBU.toIn(parseFloat(el.value) || 0); sync(); });
+    });
+  })();
+  function showMain() {
+    var a = document.getElementById('room-w'), b = document.getElementById('room-d');
+    if (a) a.value = window.TBU.num(state.main.w);
+    if (b) b.value = window.TBU.num(state.main.d);
+  }
   window.addEventListener('tb-units', function () {
     document.querySelectorAll('.area-label').forEach(function (el) { el.textContent = window.TBU.areaLabel(); });
-    renderSegs(); sync();
+    showMain(); renderBoxes(); renderSegs(); sync();
   });
   document.querySelectorAll('#map-origin button').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -3634,11 +3887,21 @@ window.TBstate = {
   });
 
   window.TBstate.register('map', function () {
-    return { origin: state.origin, nx: state.nx, ny: state.ny, preset: state.preset, segs: JSON.parse(JSON.stringify(state.segs)) };
+    return { origin: state.origin, nx: state.nx, ny: state.ny, preset: state.preset, mode: state.mode,
+             main: { w: state.main.w, d: state.main.d }, boxes: JSON.parse(JSON.stringify(state.boxes)),
+             segs: JSON.parse(JSON.stringify(state.segs)) };
   }, function (v) {
     if (!v) return;
     state.origin = v.origin || 'center'; state.nx = v.nx || 0; state.ny = v.ny || 0;
     state.preset = v.preset; state.segs = v.segs || seed('L'); doneCuts = {}; activeCut = null;
+    state.mode = v.mode || 'walls';
+    if (v.main) state.main = { w: v.main.w, d: v.main.d };
+    state.boxes = v.boxes || [];
+    var seg2 = document.getElementById('map-mode');
+    if (seg2) seg2.querySelectorAll('button').forEach(function (o) { o.setAttribute('aria-pressed', o.dataset.m === state.mode ? 'true' : 'false'); });
+    document.getElementById('map-boxes-ui').hidden = state.mode !== 'boxes';
+    document.getElementById('map-walls-ui').hidden = state.mode === 'boxes';
+    showMain(); renderBoxAdd(); renderBoxes();
     document.querySelectorAll('#map-origin button').forEach(function (o) { o.setAttribute('aria-pressed', o.dataset.o === state.origin ? 'true' : 'false'); });
     document.getElementById('map-nx').value = state.nx; document.getElementById('map-ny').value = state.ny;
     renderPresets(); renderSegs(); sync();
@@ -3646,7 +3909,7 @@ window.TBstate = {
 
   window.addEventListener('tb-change', sync);
   window.addEventListener('resize', sync);
-  renderPresets(); renderSegs(); sync();
+  renderBoxAdd(); renderBoxes(); showMain(); renderPresets(); renderSegs(); sync();
 })();
 
 
@@ -3757,6 +4020,16 @@ window.TBstate = {
         el('path', { d: 'M52 66 L52 110', stroke: INK, 'stroke-width': 1, 'stroke-dasharray': '2 2' }) +
         txt(36, 90, 'shower', { size: 8, anchor: 'middle' })),
       c: 'The top pitches <b>toward the inside</b> so water runs back in, and the front and sides follow that pitch.' };
+  };
+  D.room = function () {
+    var main = el('rect', { x: 78, y: 34, width: 132, height: 84, rx: 2, fill: FILL, stroke: EDGE, 'stroke-width': 1.2 });
+    var closet = el('rect', { x: 40, y: 52, width: 38, height: 44, rx: 2, fill: 'var(--chalk-wash)', stroke: DIM, 'stroke-width': 1.4 });
+    var chase = el('rect', { x: 186, y: 34, width: 24, height: 24, rx: 2, fill: BG, stroke: 'var(--warn)', 'stroke-width': 1.4, 'stroke-dasharray': '3 2' });
+    return { s: svg(150, main + closet + chase +
+        txt(59, 78, '+', { size: 15, fill: DIM }) + txt(198, 50, '−', { size: 15, fill: 'var(--warn)' }) +
+        txt(144, 80, 'the room', { size: 9 }) +
+        dimH(78, 210, 132, 'width') + dimV(34, 118, 226, 'depth')),
+      c: 'Start with the <b>main rectangle</b>, then stick a closet on or cut a chase out. Each box carries its own numbers.' };
   };
   D.heat = function () {
     return { s: svg(160, surf(40, 18, 200, 110, BG) +
