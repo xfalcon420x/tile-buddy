@@ -118,6 +118,16 @@
   .scoped { position: relative; padding-left: 11px; display: flex; flex-direction: column; gap: 18px; }
   .scoped::before { content: ""; position: absolute; left: 0; top: 4px; bottom: 4px; width: 2px;
                     border-radius: 2px; background: linear-gradient(var(--chalk), transparent); opacity: .5; }
+
+  /* measure diagrams — the tape goes in a different place at every input,
+     so the picture belongs AT the input, not on a help screen nobody opens */
+  .dgm { margin: 12px 0 2px; }
+  .dgm svg { width: 100%; max-width: 300px; height: auto; display: block; margin: 0 auto; }
+  .dgm-cap { font-size: .74rem; color: var(--ink-soft); text-align: center; line-height: 1.45; margin-top: 6px; }
+  .dgm-cap b { color: var(--amber); font-weight: 700; }
+  body.no-dgm .dgm { display: none; }
+  .dgm-tog { display: flex; align-items: center; gap: 9px; }
+  .dgm-tog .seg button { padding: 7px 13px; font-size: .84rem; }
   .unitbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: -6px; }
   .unitbar .seg button { padding: 7px 13px; font-size: .84rem; }
   #tile-swap { padding: 10px 12px; font-size: 1.05rem; line-height: 1; border-style: solid; }
@@ -549,6 +559,14 @@
     <button class="jobbtn ghost" id="job-del" type="button" title="Delete this job" hidden>Delete</button>
   </div>
 
+  <div class="unitbar dgm-tog">
+    <span class="pv-lbl">How to measure</span>
+    <div class="seg" id="dgm-seg">
+      <button type="button" data-d="on" aria-pressed="true">Show</button>
+      <button type="button" data-d="off" aria-pressed="false">Hide</button>
+    </div>
+  </div>
+
   <div class="unitbar">
     <span class="pv-lbl">Measure in</span>
     <div class="seg" id="unit-seg">
@@ -575,6 +593,7 @@
         <button class="btn-ghost" id="add-floor" type="button">+ Floor</button>
         <button class="btn-ghost" id="add-curb" type="button">+ Curb</button>
       </div>
+      <div class="dgm" data-dgm="curb" hidden></div>
       <p class="field-hint" id="curb-hint" hidden>A curb is three faces — <b>top, outside, inside</b> — added together and sharing a length. Pitch the top <b>1/8″ toward the inside</b> so water drains back in, and keep the front and side pieces parallel to that pitch. Walls usually go first, so trim the curb length about <b>3/8″ at each end</b> to drop in between the tiled walls.</p>
     </div>
 
@@ -590,11 +609,13 @@
           <button class="btn-ghost" id="tile-swap" type="button" title="Turn the tile 90°" aria-label="Turn the tile 90 degrees">&#8635;</button>
         </div>
         <div class="chips" id="tile-chips"></div>
+        <div class="dgm" data-dgm="tile"></div>
         <p class="field-hint">Type the <b>real measured size</b> — a &ldquo;12&Prime;&rdquo; tile is often 11 7/8 or 11 3/4. Fractions work: <span class="mono">11 7/8</span>. For planks (12&times;24, 6&times;24) set both, and <b>&#8635;</b> turns it 90&deg;.</p>
       </div>
       <div class="field">
         <p class="label">Grout joint</p>
         <div class="chips" id="grout-chips"></div>
+        <div class="dgm" data-dgm="grout"></div>
       </div>
     </div>
     <div class="card">
@@ -629,6 +650,7 @@
           <span class="unit unit-label">in</span>
         </div>
         <div class="chips" id="height-chips"></div>
+        <div class="dgm" data-dgm="size"></div>
       </div>
       <div class="field">
         <p class="label">Width at the top <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-faint)">(walls are rarely square)</span></p>
@@ -637,26 +659,30 @@
           <span class="unit unit-label">in</span>
           <button class="btn-ghost" id="wtop-clear" type="button">Square</button>
         </div>
-        <p class="field-hint" id="sq-report">Hook the tape on the <b>same left corner</b> and measure across at the bottom, then again at the top. Leave blank if it's square. Any difference and the pieces down that edge become <b>scribe cuts</b> — the app gives you both ends of each one.</p>
+        <div class="dgm" data-dgm="wtop"></div>
+        <p class="field-hint" id="sq-report">Leave it blank if the wall is square. Any difference and the pieces down that edge become <b>scribe cuts</b> — the app gives you both ends of each one.</p>
       </div>
     </div>
 
     <div class="card">
       <p class="label">Holes &amp; penetrations <span class="hint">valve, head, spout, drain</span></p>
       <div class="chips" id="hole-add"></div>
+      <div class="dgm" data-dgm="hole"></div>
       <div id="hole-list"></div>
-      <p class="field-hint" id="hole-hint">Measure to the <b>centre of the pipe</b> — across from the left edge of this surface, and up from the floor. Then the cut list tells you where the hole lands <b>on its own tile</b>, which is the number you actually mark. Sizes are starting points: cut to what the valve needs and the escutcheon covers.</p>
+      <p class="field-hint" id="hole-hint">The cut list tells you where each hole lands <b>on its own tile</b> — that is the number you mark. The sizes are starting points: cut to what the valve needs and the escutcheon covers.</p>
     </div>
 
     <div class="card">
       <p class="label">Niches &amp; recesses <span class="hint">a hole in the field, with its own layout</span></p>
       <div class="chips" id="niche-add"></div>
+      <div class="dgm" data-dgm="niche"></div>
       <div id="niche-list"></div>
-      <p class="field-hint">Measure to the <b>opening</b> — across from the left edge, up from the floor to the sill. The trade rule is to <b>land the opening on grout lines</b>: do that and the inside tiles out in full pieces with no slivers at the edge. Pitch the sill <b>1/8″</b> into the shower so it drains.</p>
+      <p class="field-hint">The trade rule is to <b>land the opening on grout lines</b>: do that and the inside tiles out in full pieces with no slivers at the edge. Pitch the sill <b>1/8″</b> into the shower so it drains.</p>
     </div>
     <div class="card">
       <p class="label">Accent bands <span class="hint">a feature row across the wall</span></p>
       <div class="chips" id="band-add"></div>
+      <div class="dgm" data-dgm="band"></div>
       <div id="band-list"></div>
       <p class="field-hint">A band cuts the wall in two: the courses below run up off the floor, and the courses above start a <b>fresh full course off the top of the band</b> — which is how it's actually set.</p>
     </div>
@@ -678,6 +704,7 @@
         <input type="number" id="trim-w" step="0.0625" min="0" inputmode="decimal" value="0.375">
         <span class="unit unit-label">in</span>
       </div>
+      <div class="dgm" data-dgm="trim"></div>
       <div id="trim-report" class="trim-report"></div>
       <p class="field-hint">Trim takes its width off the field <b>before</b> the first tile goes down, so the layout re-centres inside what's left. That's why it's an early call, not a finishing one.</p>
     </div>
@@ -694,6 +721,7 @@
         <p class="label" style="margin:16px 0 8px">Leave unheated <span class="hint">nothing permanent sits on heat</span></p>
         <div class="chips" id="heat-excl-add"></div>
         <div id="heat-excl"></div>
+        <div class="dgm" data-dgm="heat"></div>
         <div id="heat-report" class="trim-report"></div>
       </div>
       <p class="field-hint">The cable <b>cannot be cut shorter</b> — so you size the mat to the heated area and go <b>under</b>, never over. Keep it back from the walls, out from under the tub, vanity and toilet, and drop the floor sensor <b>between two cable runs</b>, not across one.</p>
@@ -1298,7 +1326,7 @@ window.TBstate = {
   function squareReport() {
     var a = A(), el = document.getElementById('sq-report');
     if (!el) return;
-    var base = 'Hook the tape on the <b>same left corner</b> and measure across at the bottom, then again at the top. Leave blank if it\'s square. Any difference and the pieces down that edge become <b>scribe cuts</b> — the app gives you both ends of each one.';
+    var base = 'Leave it blank if the wall is square. Any difference and the pieces down that edge become <b>scribe cuts</b> — the app gives you both ends of each one.';
     if (!a.wTop || Math.abs(a.wTop - a.w) < 1 / 32) { el.innerHTML = base; el.style.color = ''; return; }
     var d = a.wTop - a.w, pat = (window.TB && window.TB.pattern) || 'straight';
     var modelled = !!(window.TBEngine && window.TBEngine.GRID[pat]);
@@ -1421,8 +1449,8 @@ window.TBstate = {
     });
     var hint = document.getElementById('hole-hint');
     if (hint) hint.innerHTML = isFloor()
-      ? 'Measure to the <b>centre of the pipe</b> — across from the left edge, and out from the <b>back wall</b>. The cut list then tells you where it lands <b>on its own tile</b>. A closet flange sits <b>on top of the finished tile</b>, not under it, so cut the tile around the pipe and let the flange land over it — set it low and the toilet rocks and leaks.'
-      : 'Measure to the <b>centre of the pipe</b> — across from the left edge of this surface, and up from the floor. Then the cut list tells you where the hole lands <b>on its own tile</b>, which is the number you actually mark. Sizes are starting points: cut to what the valve needs and the escutcheon covers.';
+      ? 'The cut list tells you where each hole lands <b>on its own tile</b> — that is the number you mark. A closet flange sits <b>on top of the finished tile</b>, not under it: cut the tile around the pipe and let the flange land over it. Set it low and the toilet rocks and leaks.'
+      : 'The cut list tells you where each hole lands <b>on its own tile</b> — that is the number you mark. The sizes are starting points: cut to what the valve needs and the escutcheon covers.';
   }
 
   /* ---- niches: a recess is a void in the field AND its own little wall ----
@@ -3621,6 +3649,156 @@ window.TBstate = {
   renderPresets(); renderSegs(); sync();
 })();
 
+
+
+/* ============ MEASURE DIAGRAMS ============
+   One small drawing per input, showing where the tape actually goes. Every one
+   of these dimensions is ambiguous in words — "from left" to the edge or the
+   centre? "up" from the subfloor or the finished floor? — so it gets a picture.
+   Inline SVG on CSS variables, so it costs nothing and follows the theme. */
+(function () {
+  var NS = 'http://www.w3.org/2000/svg';
+  function el(t, a, kids) {
+    var e = '<' + t;
+    for (var k in a) e += ' ' + k + '="' + a[k] + '"';
+    return kids === undefined ? e + '/>' : e + '>' + kids + '</' + t + '>';
+  }
+  var INK = 'var(--ink-soft)', DIM = 'var(--chalk)', FILL = 'var(--tile-full)',
+      EDGE = 'var(--tile-full-edge)', HOT = 'var(--amber)', BG = 'var(--ground)';
+  function surf(x, y, w, h, f) { return el('rect', { x: x, y: y, width: w, height: h, rx: 2, fill: f || FILL, stroke: EDGE, 'stroke-width': 1.2 }); }
+  function txt(x, y, t, o) {
+    o = o || {};
+    return el('text', { x: x, y: y, fill: o.fill || INK, 'font-size': o.size || 9.5,
+      'font-weight': o.w || 600, 'text-anchor': o.anchor || 'middle',
+      'font-family': 'ui-monospace,Menlo,monospace', transform: o.rot || '' }, t);
+  }
+  // architectural dimension line: thin rule with a tick at each end
+  function dimH(x1, x2, y, label, col) {
+    col = col || DIM;
+    var t = el('line', { x1: x1, y1: y - 3.5, x2: x1, y2: y + 3.5, stroke: col, 'stroke-width': 1.3 }) +
+            el('line', { x1: x2, y1: y - 3.5, x2: x2, y2: y + 3.5, stroke: col, 'stroke-width': 1.3 }) +
+            el('line', { x1: x1, y1: y, x2: x2, y2: y, stroke: col, 'stroke-width': 1.1 });
+    return t + txt((x1 + x2) / 2, y - 6, label, { fill: col });
+  }
+  function dimV(y1, y2, x, label, col) {
+    col = col || DIM;
+    var t = el('line', { x1: x - 3.5, y1: y1, x2: x + 3.5, y2: y1, stroke: col, 'stroke-width': 1.3 }) +
+            el('line', { x1: x - 3.5, y1: y2, x2: x + 3.5, y2: y2, stroke: col, 'stroke-width': 1.3 }) +
+            el('line', { x1: x, y1: y1, x2: x, y2: y2, stroke: col, 'stroke-width': 1.1 });
+    return t + txt(0, 0, label, { fill: col, rot: 'translate(' + (x - 7) + ',' + ((y1 + y2) / 2) + ') rotate(-90)' });
+  }
+  function lead(x1, y1, x2, y2) { return el('line', { x1: x1, y1: y1, x2: x2, y2: y2, stroke: INK, 'stroke-width': .8, 'stroke-dasharray': '2 2', opacity: .8 }); }
+  function svg(h, body) { return '<svg viewBox="0 0 300 ' + h + '" xmlns="' + NS + '" aria-hidden="true">' + body + '</svg>'; }
+
+  var D = {};
+
+  D.size = function () {
+    return { s: svg(150, surf(45, 22, 175, 92) + dimH(45, 220, 132, 'width') + dimV(22, 114, 236, 'height')),
+      c: 'Measure the <b>finished opening</b> — wall to wall, and floor to ceiling. Not the studs.' };
+  };
+  D.wtop = function () {
+    var poly = el('polygon', { points: '45,22 228,22 214,114 45,114', fill: FILL, stroke: EDGE, 'stroke-width': 1.2 });
+    return { s: svg(152, poly +
+        dimH(45, 228, 14, 'at the top') + dimH(45, 214, 130, 'at the bottom') +
+        el('circle', { cx: 45, cy: 22, r: 3.2, fill: HOT }) + el('circle', { cx: 45, cy: 114, r: 3.2, fill: HOT }) +
+        txt(52, 72, 'same corner', { anchor: 'start', fill: HOT, size: 9 })),
+      c: 'Hook the tape on the <b>same left corner</b> both times. The difference is what leans.' };
+  };
+  D.tile = function () {
+    return { s: svg(138, surf(85, 20, 130, 80) + dimH(85, 215, 118, 'across') + dimV(20, 100, 231, 'up')),
+      c: 'Measure the <b>tile itself</b>, not the box. A "12 inch" tile is usually 11 7/8 or 11 3/4.' };
+  };
+  D.grout = function () {
+    return { s: svg(112, surf(55, 26, 88, 56) + surf(157, 26, 88, 56) +
+        dimH(143, 157, 98, '') + txt(150, 16, 'joint', { fill: DIM }) +
+        lead(143, 26, 143, 94) + lead(157, 26, 157, 94)),
+      c: 'The gap <b>between</b> two tiles — the spacer size you are setting to.' };
+  };
+  D.hole = function () {
+    return { s: svg(158, surf(45, 20, 175, 96) +
+        el('circle', { cx: 150, cy: 62, r: 15, fill: BG, stroke: HOT, 'stroke-width': 1.6 }) +
+        el('line', { x1: 135, y1: 62, x2: 165, y2: 62, stroke: HOT, 'stroke-width': .9 }) +
+        el('line', { x1: 150, y1: 47, x2: 150, y2: 77, stroke: HOT, 'stroke-width': .9 }) +
+        lead(150, 62, 150, 134) + lead(150, 62, 236, 62) +
+        dimH(45, 150, 134, 'from left') + dimV(62, 116, 236, 'up') +
+        dimH(135, 165, 34, 'across', HOT)),
+      c: 'Both dimensions go to the <b>centre of the pipe</b>, never its edge. The circle is the hole you cut.' };
+  };
+  D.niche = function () {
+    return { s: svg(168, surf(40, 18, 190, 104) +
+        el('rect', { x: 108, y: 44, width: 74, height: 48, rx: 2, fill: BG, stroke: DIM, 'stroke-width': 1.6 }) +
+        lead(108, 92, 108, 140) + lead(108, 92, 30, 92) +
+        dimH(40, 108, 140, 'from left') + dimV(92, 122, 30, 'up') +
+        dimH(108, 182, 36, 'wide') + dimV(44, 92, 196, 'tall')),
+      c: 'To the <b>opening</b> — its left edge and its sill, not the middle. Depth is the recess into the wall.' };
+  };
+  D.band = function () {
+    return { s: svg(150, surf(40, 18, 190, 100) +
+        el('rect', { x: 40, y: 62, width: 190, height: 20, fill: 'var(--chalk-wash)', stroke: DIM, 'stroke-width': 1.4 }) +
+        lead(40, 82, 26, 82) + dimV(82, 118, 26, 'up') + dimV(62, 82, 244, 'tall')),
+      c: 'Up from the floor to the <b>bottom of the band</b>, then how tall the band itself is.' };
+  };
+  D.trim = function () {
+    return { s: svg(150, surf(30, 58, 150, 26) +
+        el('rect', { x: 30, y: 84, width: 150, height: 14, fill: 'var(--panel-edge)', stroke: EDGE, 'stroke-width': 1 }) +
+        txt(105, 95, 'substrate', { size: 8, fill: INK }) +
+        el('path', { d: 'M180 58 L196 58 L196 98 L180 98 Z', fill: 'none', stroke: HOT, 'stroke-width': 2 }) +
+        el('path', { d: 'M180 58 L196 58', stroke: HOT, 'stroke-width': 3 }) +
+        dimH(180, 196, 44, 'face', HOT) + dimV(58, 84, 214, 'tile thickness') +
+        txt(105, 74, 'tile', { size: 9, fill: INK })),
+      c: 'The profile size you order is the <b>tile thickness</b> it sits against — not the face you see.' };
+  };
+  D.curb = function () {
+    return { s: svg(150, el('path', { d: 'M60 60 L240 60 L240 116 L60 116 Z', fill: FILL, stroke: EDGE, 'stroke-width': 1.2 }) +
+        el('line', { x1: 60, y1: 60, x2: 240, y2: 66, stroke: HOT, 'stroke-width': 2.4 }) +
+        txt(150, 50, 'top — pitch 1/8 inward', { fill: HOT, size: 9 }) +
+        txt(150, 92, 'outside face', { size: 9 }) +
+        txt(150, 132, 'inside faces the shower', { size: 9 }) +
+        el('path', { d: 'M52 66 L52 110', stroke: INK, 'stroke-width': 1, 'stroke-dasharray': '2 2' }) +
+        txt(36, 90, 'shower', { size: 8, anchor: 'middle' })),
+      c: 'The top pitches <b>toward the inside</b> so water runs back in, and the front and sides follow that pitch.' };
+  };
+  D.heat = function () {
+    return { s: svg(160, surf(40, 18, 200, 110, BG) +
+        el('rect', { x: 58, y: 34, width: 164, height: 78, fill: 'var(--chalk-wash)', stroke: DIM, 'stroke-width': 1.4, 'stroke-dasharray': '4 3' }) +
+        el('rect', { x: 168, y: 34, width: 54, height: 40, fill: 'var(--warn-wash)', stroke: 'var(--warn)', 'stroke-width': 1.3 }) +
+        txt(195, 58, 'no heat', { size: 8, fill: 'var(--warn)' }) +
+        dimH(40, 58, 140, 'back') + txt(140, 128, 'heated', { fill: DIM, size: 9 })),
+      c: 'Heat stops short of the walls, and <b>nothing permanent sits on it</b> — no tub, vanity or toilet.' };
+  };
+
+  function paint() {
+    document.querySelectorAll('.dgm[data-dgm]').forEach(function (host) {
+      var f = D[host.getAttribute('data-dgm')];
+      if (!f || host.dataset.done) return;
+      var o = f();
+      host.innerHTML = o.s + '<p class="dgm-cap">' + o.c + '</p>';
+      host.dataset.done = '1';
+    });
+  }
+  var KEY = 'tilebuddy.diagrams';
+  function apply(on) {
+    document.body.classList.toggle('no-dgm', !on);
+    var seg = document.getElementById('dgm-seg');
+    if (seg) seg.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', (b.dataset.d === 'on') === on ? 'true' : 'false'); });
+  }
+  var on = true;
+  try { on = localStorage.getItem(KEY) !== 'off'; } catch (e) {}
+  paint(); apply(on);
+  var seg = document.getElementById('dgm-seg');
+  if (seg) seg.querySelectorAll('button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.dataset.d === 'on';
+      try { localStorage.setItem(KEY, v ? 'on' : 'off'); } catch (e) {}
+      apply(v);
+    });
+  });
+  // the curb drawing only matters once there's a curb in the job
+  window.addEventListener('tb-change', function () {
+    var hint = document.getElementById('curb-hint'), d = document.querySelector('.dgm[data-dgm="curb"]');
+    if (hint && d) d.hidden = hint.hidden;
+  });
+})();
 
 /* ============ SELF-TEST — the proofs, made permanent ============
    Open with ?selftest. Sweeps randomised jobs through the REAL engine
