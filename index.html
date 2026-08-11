@@ -128,6 +128,38 @@
   body.no-dgm .dgm { display: none; }
   .dgm-tog { display: flex; align-items: center; gap: 9px; }
   .dgm-tog .seg button { padding: 7px 13px; font-size: .84rem; }
+
+  /* Step flow. One decision at a time when you're setting a job up — but the
+     answer stays on screen, because watching the cut list move as you change a
+     number is the whole point of the thing. "See it all" restores one scroll. */
+  .stepper { position: sticky; top: 66px; z-index: 4; background: var(--glass); border: 1px solid var(--glass-brd);
+             border-radius: 12px; padding: 10px 13px; box-shadow: var(--shadow), inset 0 1px 0 var(--glass-hi);
+             -webkit-backdrop-filter: blur(20px) saturate(1.35); backdrop-filter: blur(20px) saturate(1.35); }
+  .step-dots { display: flex; gap: 5px; }
+  .step-dot { flex: 1; height: 5px; border-radius: 3px; background: var(--panel-edge); border: none; padding: 0;
+              cursor: pointer; transition: .15s; }
+  .step-dot.done { background: color-mix(in srgb, var(--chalk) 55%, transparent); }
+  .step-dot.now { background: var(--chalk); }
+  .step-now { display: flex; align-items: baseline; gap: 9px; margin-top: 9px; flex-wrap: wrap; }
+  .step-title { font-family: var(--serif); font-size: 1.06rem; font-weight: 600; }
+  .step-live { margin-left: auto; font-family: ui-monospace, Menlo, monospace; font-size: .78rem;
+               font-weight: 700; color: var(--chalk-deep); background: var(--chalk-wash);
+               padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+  .step-nav { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+  .step-nav button { flex: 1; padding: 13px; font-size: .95rem; }
+  .step-nav #step-back { border-style: solid; }
+  body.all-at-once .stepper, body.all-at-once .step-nav { display: none; }
+  body.all-at-once .step { display: block !important; }
+  body:not(.all-at-once) #panel-layout .sect { display: none; }   /* the stepper already names it */
+  .prefs { border: 1px solid var(--panel-edge); border-radius: 11px; background: var(--panel); }
+  .prefs summary { cursor: pointer; padding: 10px 14px; font-size: .82rem; font-weight: 600; color: var(--ink-soft);
+                   list-style: none; display: flex; align-items: center; gap: 10px; }
+  .prefs summary::-webkit-details-marker { display: none; }
+  .prefs summary::after { content: "▾"; color: var(--ink-faint); margin-left: auto; transition: .15s; }
+  .prefs[open] summary::after { transform: rotate(180deg); }
+  .prefs-now { font-family: ui-monospace, Menlo, monospace; font-size: .74rem; color: var(--ink-faint); font-weight: 600; }
+  .prefs-body { padding: 2px 14px 14px; display: flex; flex-direction: column; gap: 12px; }
+  .prefs-body .unitbar { margin-top: 0; }
   .unitbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: -6px; }
   .unitbar .seg button { padding: 7px 13px; font-size: .84rem; }
   #tile-swap { padding: 10px 12px; font-size: 1.05rem; line-height: 1; border-style: solid; }
@@ -560,6 +592,17 @@
     <button class="jobbtn ghost" id="job-del" type="button" title="Delete this job" hidden>Delete</button>
   </div>
 
+  <details class="prefs" id="prefs">
+    <summary><span>Settings</span><span class="prefs-now" id="prefs-now"></span></summary>
+    <div class="prefs-body">
+  <div class="unitbar dgm-tog">
+    <span class="pv-lbl">Show me</span>
+    <div class="seg" id="flow-seg">
+      <button type="button" data-f="step" aria-pressed="true">One step at a time</button>
+      <button type="button" data-f="all" aria-pressed="false">All of it</button>
+    </div>
+  </div>
+
   <div class="unitbar dgm-tog">
     <span class="pv-lbl">How to measure</span>
     <div class="seg" id="dgm-seg">
@@ -577,9 +620,19 @@
       <button type="button" data-u="mm" aria-pressed="false">mm</button>
     </div>
   </div>
+    </div>
+  </details>
 
   <!-- ============ LAYOUT ============ -->
   <section id="panel-layout" class="panel" role="tabpanel">
+    <div class="stepper" id="stepper">
+      <div class="step-dots" id="step-dots"></div>
+      <div class="step-now">
+        <span class="step-title" id="step-title"></span>
+        <span class="step-live" id="step-live"></span>
+      </div>
+    </div>
+    <div class="step" data-step="1" data-title="The job">
     <div class="sect"><span class="sect-n">1</span><span class="sect-t">The job</span><span class="sect-h">what you're tiling</span></div>
     <div class="card">
       <p class="label">What are you tiling?</p>
@@ -598,6 +651,8 @@
       <p class="field-hint" id="curb-hint" hidden>A curb is three faces — <b>top, outside, inside</b> — added together and sharing a length. Pitch the top <b>1/8″ toward the inside</b> so water drains back in, and keep the front and side pieces parallel to that pitch. Walls usually go first, so trim the curb length about <b>3/8″ at each end</b> to drop in between the tiled walls.</p>
     </div>
 
+    </div>
+    <div class="step" data-step="2" data-title="The tile">
     <div class="sect"><span class="sect-n">2</span><span class="sect-t">The tile</span><span class="sect-h">every surface uses this</span></div>
     <div class="card">
       <div class="field">
@@ -632,6 +687,8 @@
       </div>
       <p class="pat-note">The dry lay below sizes cuts for the <b>straight &amp; offset</b> family (straight, running bond, thirds, vertical). Herringbone and the angled patterns lay differently — their cut math is on the way.</p>
     </div>
+    </div>
+    <div class="step" data-step="3" data-title="This surface">
     <div class="sect" id="sect-surface"><span class="sect-n">3</span><span class="sect-t">This surface</span><span class="sect-h" id="sect-surface-name"></span></div>
     <div class="scoped">
     <div class="card">
@@ -729,6 +786,8 @@
     </div>
 
     </div>
+    </div>
+    <div class="step" data-step="4" data-title="The layout">
     <div class="sect"><span class="sect-n">4</span><span class="sect-t">The layout</span><span class="sect-h">where it starts and every cut</span></div>
 
     <div class="card verdict" id="verdict">
@@ -770,13 +829,19 @@
       <p class="surf2d-note" id="surf2d-note"></p>
     </div>
 
-    <div class="card">
-    <div class="sect"><span class="sect-n">5</span><span class="sect-t">The whole job</span><span class="sect-h">every surface added up</span></div>
-      <p class="label">Whole job <span class="hint">every surface added up</span></p>
-      <div id="job-total" class="cutlist"></div>
     </div>
-
-    <footer>Cut pieces <b>2″ or less</b> get flagged as slivers.</footer>
+    <div class="step" data-step="5" data-title="The whole job">
+    <div class="sect"><span class="sect-n">5</span><span class="sect-t">The whole job</span><span class="sect-h">every surface added up</span></div>
+      <div class="card">
+        <p class="label">Whole job <span class="hint">every surface added up</span></p>
+        <div id="job-total" class="cutlist"></div>
+      </div>
+      <footer>Cut pieces <b>2″ or less</b> get flagged as slivers.</footer>
+    </div>
+    <div class="step-nav" id="step-nav">
+      <button class="btn-ghost" id="step-back" type="button">← Back</button>
+      <button class="jobbtn" id="step-next" type="button">Next →</button>
+    </div>
   </section>
 
   <!-- ============ PREVIEW ============ -->
@@ -3913,6 +3978,82 @@ window.TBstate = {
 })();
 
 
+
+
+/* ============ preferences strip ============ */
+(function () {
+  var el = document.getElementById('prefs-now');
+  if (!el) return;
+  function say() {
+    var flow = document.body.classList.contains('all-at-once') ? 'all at once' : 'step by step';
+    var dg = document.body.classList.contains('no-dgm') ? 'no diagrams' : 'diagrams on';
+    el.textContent = flow + ' · ' + dg + ' · ' + (window.TBU ? window.TBU.label() : 'in');
+  }
+  ['click', 'tb-units'].forEach(function (ev) { window.addEventListener(ev, function () { setTimeout(say, 0); }, true); });
+  say();
+})();
+
+/* ============ STEP FLOW ============ */
+(function () {
+  var steps = [].slice.call(document.querySelectorAll('#panel-layout .step'));
+  if (!steps.length) return;
+  var dots = document.getElementById('step-dots'), titleEl = document.getElementById('step-title'),
+      liveEl = document.getElementById('step-live'), back = document.getElementById('step-back'),
+      next = document.getElementById('step-next'), seg = document.getElementById('flow-seg');
+  var at = 0, KEY = 'tilebuddy.flow';
+
+  steps.forEach(function (st, i) {
+    var b = document.createElement('button');
+    b.className = 'step-dot'; b.type = 'button';
+    b.setAttribute('aria-label', 'Step ' + (i + 1) + ' — ' + st.dataset.title);
+    b.addEventListener('click', function () { go(i, true); });
+    dots.appendChild(b);
+  });
+
+  function live() {
+    // the answer follows you from step to step — never hidden behind a "next"
+    var t = document.querySelector('#cutlist .cutrow.total .cnt');
+    var f = document.querySelector('#cutlist .cutrow.full .cnt');
+    var n = document.querySelectorAll('#cutlist .cbnrow').length;
+    if (!t) { liveEl.textContent = ''; return; }
+    liveEl.textContent = t.textContent + ' tiles · ' + f.textContent + ' full · ' + n + ' cut' + (n === 1 ? '' : 's');
+  }
+  function go(i, scroll) {
+    at = Math.max(0, Math.min(steps.length - 1, i));
+    steps.forEach(function (st, k) { st.style.display = k === at ? 'block' : 'none'; });
+    [].slice.call(dots.children).forEach(function (d, k) {
+      d.className = 'step-dot' + (k === at ? ' now' : k < at ? ' done' : '');
+    });
+    titleEl.textContent = (at + 1) + '. ' + steps[at].dataset.title;
+    back.style.visibility = at === 0 ? 'hidden' : 'visible';
+    next.textContent = at === steps.length - 1 ? 'Order list →' : 'Next →';
+    live();
+    if (scroll) window.scrollTo({ top: Math.max(0, document.getElementById('stepper').offsetTop - 78), behavior: 'smooth' });
+  }
+  back.addEventListener('click', function () { go(at - 1, true); });
+  next.addEventListener('click', function () {
+    if (at === steps.length - 1) {
+      var bt = [].slice.call(document.querySelectorAll('.tab')).filter(function (t) { return t.dataset.panel === 'buy'; })[0];
+      if (bt) { bt.click(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+      return;
+    }
+    go(at + 1, true);
+  });
+
+  function mode(all) {
+    document.body.classList.toggle('all-at-once', all);
+    if (seg) seg.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', (b.dataset.f === 'all') === all ? 'true' : 'false'); });
+    if (!all) go(at, false);
+    try { localStorage.setItem(KEY, all ? 'all' : 'step'); } catch (e) {}
+  }
+  if (seg) seg.querySelectorAll('button').forEach(function (b) {
+    b.addEventListener('click', function () { mode(b.dataset.f === 'all'); });
+  });
+  var saved = 'step';
+  try { saved = localStorage.getItem(KEY) || 'step'; } catch (e) {}
+  go(0, false); mode(saved === 'all');
+  window.addEventListener('tb-change', live);
+})();
 
 /* ============ MEASURE DIAGRAMS ============
    One small drawing per input, showing where the tape actually goes. Every one
