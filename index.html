@@ -255,14 +255,16 @@
   /* ---------- LAYOUT panel ---------- */
   #panel-layout .field + .field { margin-top: 16px; }
   #panel-layout .row { display: flex; align-items: center; gap: 10px; }
-  #panel-layout input[type="number"] {
+  #panel-layout input[type="number"],
+  #panel-layout input[type="text"] {
     font-family: ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums;
     width: 100%; font-size: 1.25rem; font-weight: 600; padding: 12px 14px; color: var(--ink);
     background: var(--ground); border: 1.5px solid var(--panel-edge); border-radius: 10px; -moz-appearance: textfield;
   }
   #panel-layout input[type="number"]::-webkit-outer-spin-button,
   #panel-layout input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-  #panel-layout input[type="number"]:focus-visible { outline: none; border-color: var(--chalk); box-shadow: 0 0 0 3px var(--chalk-wash); }
+  #panel-layout input[type="number"]:focus-visible,
+  #panel-layout input[type="text"]:focus-visible { outline: none; border-color: var(--chalk); box-shadow: 0 0 0 3px var(--chalk-wash); }
   #panel-layout .chips { margin-top: 10px; }
   .unit { color: var(--ink-faint); font-size: .9rem; font-weight: 600; white-space: nowrap; }
 
@@ -4109,14 +4111,31 @@ window.TBstate = {
       c: 'Hook the tape on the <b>same left corner</b> both times. The difference is what leans.' };
   };
   D.tile = function () {
-    return { s: svg(138, surf(85, 20, 130, 80) + dimH(85, 215, 118, 'across') + dimV(20, 100, 231, 'up')),
-      c: 'Measure the <b>tile itself</b>, not the box. A "12 inch" tile is usually 11 7/8 or 11 3/4.' };
+    var T = window.TB || {}, tw = T.tw || 12, th = T.th || 12, U = window.TBU;
+    /* Drawn against a common 24 inch reference rather than stretched to fit, so a
+       subway tile reads small and a large-format reads large — proportion AND scale.
+       Floored so a mosaic is still big enough to carry its dimensions. */
+    var MAXH = 92, MAXW = 150, per = MAXH / 24;
+    var w = tw * per, h = th * per, big = Math.max(w, h);
+    if (big < 20) { w *= 20 / big; h *= 20 / big; }   // low enough that 4x4 and 6x6 stay distinct
+    if (w > MAXW) { h *= MAXW / w; w = MAXW; }
+    if (h > MAXH) { w *= MAXH / h; h = MAXH; }
+    var x = 150 - w / 2, y = 22 + (MAXH - h) / 2;
+    return { s: svg(150, surf(x, y, w, h) +
+        dimH(x, x + w, y + h + 20, U.fmt(tw)) + dimV(y, y + h, x + w + 18, U.fmt(th))),
+      c: 'Measure the <b>tile itself</b>, not the box — a "12 inch" tile is usually 11 7/8 or 11 3/4.' };
   };
   D.grout = function () {
-    return { s: svg(112, surf(55, 26, 88, 56) + surf(157, 26, 88, 56) +
-        dimH(143, 157, 98, '') + txt(150, 16, 'joint', { fill: DIM }) +
-        lead(143, 26, 143, 94) + lead(157, 26, 157, 94)),
-      c: 'The gap <b>between</b> two tiles — the spacer size you are setting to.' };
+    var T = window.TB || {}, g = T.grout === undefined ? 0.125 : T.grout, tw = T.tw || 12, U = window.TBU;
+    // to scale a 1/8 joint on a 12 inch tile is under a pixel, so the gap is drawn
+    // enlarged — but it still grows and shrinks with the real number, and says so
+    var tilePx = 96, gap = Math.max(5, Math.min(34, tilePx * (g / Math.max(1, tw)) * 7));
+    var half = gap / 2, L = 150 - half - tilePx, R = 150 + half;
+    return { s: svg(120, surf(L, 26, tilePx, 58) + surf(R, 26, tilePx, 58) +
+        el('rect', { x: 150 - half, y: 26, width: gap, height: 58, fill: 'var(--grout)' }) +
+        lead(150 - half, 26, 150 - half, 100) + lead(150 + half, 26, 150 + half, 100) +
+        dimH(150 - half, 150 + half, 100, U.fmt(g), HOT)),
+      c: 'The gap <b>between</b> two tiles — the spacer you set to. Drawn enlarged so you can see it.' };
   };
   D.hole = function () {
     return { s: svg(158, surf(45, 20, 175, 96) +
@@ -4181,15 +4200,19 @@ window.TBstate = {
       c: 'Heat stops short of the walls, and <b>nothing permanent sits on it</b> — no tub, vanity or toilet.' };
   };
 
-  function paint() {
+  var LIVE = { tile: 1, grout: 1 };        // these mirror the current numbers
+  function paint(force) {
     document.querySelectorAll('.dgm[data-dgm]').forEach(function (host) {
-      var f = D[host.getAttribute('data-dgm')];
-      if (!f || host.dataset.done) return;
+      var kind = host.getAttribute('data-dgm'), f = D[kind];
+      if (!f) return;
+      if (host.dataset.done && !(force && LIVE[kind])) return;
       var o = f();
       host.innerHTML = o.s + '<p class="dgm-cap">' + o.c + '</p>';
       host.dataset.done = '1';
     });
   }
+  window.addEventListener('tb-change', function () { paint(true); });
+  window.addEventListener('tb-units', function () { paint(true); });
   var KEY = 'tilebuddy.diagrams';
   function apply(on) {
     document.body.classList.toggle('no-dgm', !on);
