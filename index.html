@@ -1471,7 +1471,7 @@ window.TBstate = {
     var base = 'Leave it blank if the wall is square. Any difference and the pieces down that edge become <b>scribe cuts</b> — the app gives you both ends of each one.';
     if (!a.wTop || Math.abs(a.wTop - a.w) < 1 / 32) { el.innerHTML = base; el.style.color = ''; return; }
     var d = a.wTop - a.w, pat = (window.TB && window.TB.pattern) || 'straight';
-    var modelled = !!(window.TBEngine && window.TBEngine.GRID[pat]);
+    var modelled = true;                       // every pattern follows the lean now
     el.innerHTML = '<b>Out of square by ' + toDim(Math.abs(d)) + '</b> — ' + toDim(Math.abs(d) / a.h * 12) + ' per foot of height, leaning ' +
       (d > 0 ? 'wider at the top' : 'wider at the bottom') + '. ' +
       (modelled
@@ -2718,15 +2718,30 @@ window.TBstate = {
     return out;
   }
   // an accent band is its own little run of tile across the field
-  function bandTiles(W, H, grout, tr, bands) {
-    var F = fieldRegions(W, H, tr, bands), out = [];
+  function bandTiles(W, H, grout, tr, bands, wTop) {
+    var F = fieldRegions(W, H, tr, bands), out = [], eg = edgeFn(W, H, wTop, tr);
     (bands || []).filter(function (b) { return b.h > 0; }).forEach(function (b) {
       var y0 = Math.max(F.trim.t, H - b.y - b.h), y1 = Math.min(H - F.trim.b, H - b.y);
       if (y1 - y0 <= 0.02) return;
       var tw = b.tw > 0 ? b.tw : 12, mod = tw + grout;
-      var anchor = (F.x0 + F.x1) / 2 - tw / 2;
-      for (var k = Math.floor((F.x0 - anchor) / mod) - 2; k <= Math.ceil((F.x1 - anchor) / mod) + 2; k++) {
-        var l = anchor + k * mod, cl = Math.max(F.x0, l), cr = Math.min(F.x1, l + tw);
+      // the right-hand bound is the wall itself, which may lean OUT past the nominal
+      // width — clamping to F.x1 here quietly shortened every band on such a wall
+      var bound = function (y) { return eg ? eg(y) : F.x1; };
+      var far = Math.max(bound(y0), bound(y1), F.x1);
+      var anchor = (F.x0 + far) / 2 - tw / 2;
+      for (var k = Math.floor((F.x0 - anchor) / mod) - 2; k <= Math.ceil((far - anchor) / mod) + 2; k++) {
+        var l = anchor + k * mod, cl = Math.max(F.x0, l), right = l + tw;
+        var eT = Math.min(right, bound(y0)), eB = Math.min(right, bound(y1));
+        if (eT - cl <= 0.02 && eB - cl <= 0.02) continue;
+        if (Math.abs(eT - eB) > 1e-6) {
+          var wT = Math.max(0, eT - cl), wB = Math.max(0, eB - cl);
+          out.push({ x: cl, y: y0, w: Math.max(wT, wB), h: y1 - y0, band: true, role: b.t || 'accent band',
+            scribe: true, wTopEdge: wT, wBotEdge: wB, area: (wT + wB) / 2 * (y1 - y0),
+            poly: [{ x: cl, y: y0 }, { x: cl + wT, y: y0 }, { x: cl + wB, y: y1 }, { x: cl, y: y1 }],
+            fullW: false, fullH: true });
+          continue;
+        }
+        var cr = Math.min(eT, eB);
         if (cr - cl > 0.02) out.push({ x: cl, y: y0, w: cr - cl, h: y1 - y0, band: true,
           fullW: (cr - cl) >= tw - 0.02, fullH: true, role: b.t || 'accent band' });
       }
@@ -2748,11 +2763,11 @@ window.TBstate = {
      rows offset by half a width, with rows 3/4 of a hex apart. Each hex is
      clipped to the surface, so the edge pieces are true shapes. */
   var HEX_MIN = 0.05;      // sq in — below this it is a speck, not a tile you could cut
-  function hexTiles(W, H, across, grout, rects, acc) {
+  function hexTiles(W, H, across, grout, shapes, acc) {
     var R = across / Math.sqrt(3);                 // centre → vertex
     var stepX = across + grout, stepY = 1.5 * R + grout * 0.866;
     var out = [], rows = Math.ceil(H / stepY) + 2, cols = Math.ceil(W / stepX) + 2;
-    var RS = rects && rects.length ? rects : [{ x: 0, y: 0, w: W, h: H }];
+    var RS = (shapes && shapes.polys) ? shapes.polys : [rectPoly({ x: 0, y: 0, w: W, h: H })];
     var fullA = 1.5 * Math.sqrt(3) * R * R;
     for (var r = -1; r <= rows; r++) {
       for (var c = -1; c <= cols; c++) {
@@ -2763,8 +2778,7 @@ window.TBstate = {
           poly.push({ x: cx + R * Math.cos(a), y: cy - R * Math.sin(a) });
         }
         for (var q = 0; q < RS.length; q++) {
-          var Rq = RS[q];
-          var clipped = clipToRect(poly, Rq.x, Rq.y, Rq.x + Rq.w, Rq.y + Rq.h);
+          var clipped = clipToPoly(poly, RS[q]);
           if (clipped.length < 3) continue;
           var ar = polyArea2(clipped);
           if (ar < HEX_MIN) { if (acc) acc.dropped += ar; continue; }
@@ -2775,6 +2789,43 @@ window.TBstate = {
       }
     }
     return out;
+  }
+  /* Only the grid patterns knew about a leaning wall — diagonal, herringbone,
+     basketweave and hex all clipped to an axis-aligned rectangle, so an out-of-square
+     wall drew square and the cuts down that edge were wrong. They now clip to the
+     real field shape, which is a trapezoid whenever the wall leans. */
+  function clipToPoly(subject, clip) {
+    var c = clip.slice(), a2 = 0;
+    for (var k = 0, m = c.length - 1; k < c.length; m = k++) a2 += c[m].x * c[k].y - c[k].x * c[m].y;
+    if (a2 < 0) c.reverse();
+    var out = subject;
+    for (var i = 0; i < c.length && out.length; i++) {
+      var A = c[i], B = c[(i + 1) % c.length], inp = out; out = [];
+      for (var j = 0; j < inp.length; j++) {
+        var P = inp[j], Q = inp[(j + 1) % inp.length];
+        var dp = (B.x - A.x) * (P.y - A.y) - (B.y - A.y) * (P.x - A.x);
+        var dq = (B.x - A.x) * (Q.y - A.y) - (B.y - A.y) * (Q.x - A.x);
+        if (dp >= -1e-9) out.push(P);
+        if ((dp > 1e-9 && dq < -1e-9) || (dp < -1e-9 && dq > 1e-9)) {
+          var t = dp / (dp - dq);
+          out.push({ x: P.x + (Q.x - P.x) * t, y: P.y + (Q.y - P.y) * t });
+        }
+      }
+    }
+    return out;
+  }
+  function rectPoly(r) { return [{ x: r.x, y: r.y }, { x: r.x + r.w, y: r.y }, { x: r.x + r.w, y: r.y + r.h }, { x: r.x, y: r.y + r.h }]; }
+  // the field as convex shapes: plain rectangles, or trapezoids when the wall leans
+  function fieldShapes(W, H, tr, bands, wTop) {
+    var rects = fieldRects(W, H, tr, bands), eg = edgeFn(W, H, wTop, tr);
+    if (!eg) return { rects: rects, polys: rects.map(rectPoly), tapered: false };
+    return {
+      rects: rects, tapered: true,
+      polys: rects.map(function (r) {
+        return [{ x: r.x, y: r.y }, { x: Math.max(r.x, eg(r.y)), y: r.y },
+                { x: Math.max(r.x, eg(r.y + r.h)), y: r.y + r.h }, { x: r.x, y: r.y + r.h }];
+      })
+    };
   }
   function clipToRect(poly, x0, y0, x1, y1) {
     var edges = [[1, 0, x0], [-1, 0, -x1], [0, 1, y0], [0, -1, -y1]], out = poly;
@@ -2891,9 +2942,9 @@ window.TBstate = {
   /* Diagonal is the grid turned 45°. Generate the lattice in the rotated frame,
      rotate each square into place, then clip it like anything else — now that the
      clipper handles polygons this costs almost nothing. */
-  function diagonal2D(W, H, tw, th, grout, rects, acc) {
+  function diagonal2D(W, H, tw, th, grout, shapes, acc) {
     var s = Math.min(tw, th), mod = s + grout, out = [];
-    var RS = rects && rects.length ? rects : [{ x: 0, y: 0, w: W, h: H }];
+    var RS = (shapes && shapes.polys) ? shapes.polys : [rectPoly({ x: 0, y: 0, w: W, h: H })];
     var c = Math.SQRT1_2, cx = W / 2, cy = H / 2;
     var N = Math.ceil((W + H) / mod) + 3, fullA = s * s;
     for (var i = -N; i <= N; i++) for (var j = -N; j <= N; j++) {
@@ -2903,7 +2954,7 @@ window.TBstate = {
         poly.push({ x: cx + (a - b) * c, y: cy + (a + b) * c });
       });
       for (var q = 0; q < RS.length; q++) {
-        var Rq = RS[q], cl = clipToRect(poly, Rq.x, Rq.y, Rq.x + Rq.w, Rq.y + Rq.h);
+        var cl = clipToPoly(poly, RS[q]);
         if (cl.length < 3) continue;
         var ar = polyArea2(cl);
         if (ar < HEX_MIN) { if (acc) acc.dropped += ar; continue; }
@@ -2916,18 +2967,20 @@ window.TBstate = {
   }
   /* Basketweave: 2s x 2s blocks, alternating two planks laid flat and two on end.
      Needs a 2:1 plank; anything else uses long/2 the way herringbone does. */
-  function basket2D(W, H, tw, th, grout, rects) {
+  function basket2D(W, H, tw, th, grout, shapes, acc) {
     var lo = Math.min(tw, th), hi = Math.max(tw, th);
     var s = (Math.abs(hi - 2 * lo) <= Math.max(0.05, hi * 0.02)) ? lo : hi / 2;
-    var B = 2 * s, out = [], RS = rects && rects.length ? rects : [{ x: 0, y: 0, w: W, h: H }];
+    var B = 2 * s, out = [];
+    var sh = shapes && shapes.polys ? shapes : { rects: [{ x: 0, y: 0, w: W, h: H }], polys: [rectPoly({ x: 0, y: 0, w: W, h: H })], tapered: false };
     var nx = Math.ceil(W / B) + 2, ny = Math.ceil(H / B) + 2;
     for (var i = -1; i <= nx; i++) for (var j = -1; j <= ny; j++) {
       var bx = i * B, by = j * B, flat = (((i + j) % 2) + 2) % 2 === 0;
       var planks = flat
         ? [[bx, by, B, s], [bx, by + s, B, s]]
         : [[bx, by, s, B], [bx + s, by, s, B]];
-      for (var q = 0; q < RS.length; q++) for (var k = 0; k < 2; k++) {
-        pushClip(out, planks[k][0], planks[k][1], planks[k][2], planks[k][3], RS[q]);
+      for (var q = 0; q < sh.polys.length; q++) for (var k = 0; k < 2; k++) {
+        if (!sh.tapered) pushClip(out, planks[k][0], planks[k][1], planks[k][2], planks[k][3], sh.rects[q]);
+        else pushPoly(out, planks[k], sh.polys[q], acc);
       }
     }
     return out;
@@ -2939,17 +2992,28 @@ window.TBstate = {
     var lo = Math.min(tw, th), hi = Math.max(tw, th);
     return (Math.abs(hi - 2 * lo) <= Math.max(0.05, hi * 0.02)) ? { s: lo, exact: true } : { s: hi / 2, exact: false };
   }
-  function herringbone2D(W, H, tw, th, rects) {
+  function herringbone2D(W, H, tw, th, shapes, acc) {
     var s = plankOf(tw, th).s, tiles = [], cx = W / 2, cy = H / 2, N = Math.ceil(Math.max(W, H) / s) + 6;
-    var RS = rects && rects.length ? rects : [{ x: 0, y: 0, w: W, h: H }];
+    var sh = shapes && shapes.polys ? shapes : { rects: [{ x: 0, y: 0, w: W, h: H }], polys: [rectPoly({ x: 0, y: 0, w: W, h: H })], tapered: false };
     for (var i = -N; i <= N; i++) for (var j = -N; j <= N; j++) {
       var px = cx + (i * -3 + j * -2) * s, py = cy + (i * -1 + j * -2) * s;
-      for (var q = 0; q < RS.length; q++) {
-        pushClip(tiles, px, py, 2 * s, s, RS[q]);
-        pushClip(tiles, px - 2 * s, py, s, 2 * s, RS[q]);
+      var planks = [[px, py, 2 * s, s], [px - 2 * s, py, s, 2 * s]];
+      for (var q = 0; q < sh.polys.length; q++) for (var k = 0; k < 2; k++) {
+        if (!sh.tapered) { pushClip(tiles, planks[k][0], planks[k][1], planks[k][2], planks[k][3], sh.rects[q]); continue; }
+        pushPoly(tiles, planks[k], sh.polys[q], acc);
       }
     }
     return tiles;
+  }
+  // a plank crossing a leaning wall comes off as a shape, not a tidy rectangle
+  function pushPoly(arr, r, clip, acc) {
+    var cl = clipToPoly(rectPoly({ x: r[0], y: r[1], w: r[2], h: r[3] }), clip);
+    if (cl.length < 3) return;
+    var ar = polyArea2(cl);
+    if (ar < HEX_MIN) { if (acc) acc.dropped += ar; return; }   // counted, never just lost
+    var pb = polyBBox(cl), full = ar >= r[2] * r[3] - 0.05;
+    arr.push({ x: pb.x0, y: pb.y0, w: pb.x1 - pb.x0, h: pb.y1 - pb.y0, poly: cl, area: ar,
+      nomA: r[2] * r[3], shaped: !full, fullW: full, fullH: full });
   }
 
   var doneCuts = {}, activeCut = null;
@@ -3310,14 +3374,14 @@ window.TBstate = {
     var agg = { full: 0, half: 0, third: 0, cut: 0, sliver: 0, holes: 0, total: 0 }, measured = 0;
     surfaces.forEach(function (s) {
       if (!(s.w > 0) || !(s.h > 0)) return;
-      var rectsJ = fieldRects(s.w, s.h, s.trim, s.bands);
-      var raw = (pat === 'herring') ? herringbone2D(s.w, s.h, tw, th, rectsJ)
-              : (pat === 'hex') ? hexTiles(s.w, s.h, Math.min(tw, th), grout, rectsJ)
-              : (pat === 'diagonal') ? diagonal2D(s.w, s.h, tw, th, grout, rectsJ)
-              : (pat === 'basket') ? basket2D(s.w, s.h, tw, th, grout, rectsJ)
+      var shJ = fieldShapes(s.w, s.h, s.trim, s.bands, s.wTop);
+      var raw = (pat === 'herring') ? herringbone2D(s.w, s.h, tw, th, shJ)
+              : (pat === 'hex') ? hexTiles(s.w, s.h, Math.min(tw, th), grout, shJ)
+              : (pat === 'diagonal') ? diagonal2D(s.w, s.h, tw, th, grout, shJ)
+              : (pat === 'basket') ? basket2D(s.w, s.h, tw, th, grout, shJ)
               : (GRID[pat] ? fieldTiles(s.w, s.h, tw, th, grout, mode, pat, s.trim, s.bands, s.wTop) : null);
       if (!raw) return;
-      raw = raw.concat(bandTiles(s.w, s.h, grout, s.trim, s.bands));
+      raw = raw.concat(bandTiles(s.w, s.h, grout, s.trim, s.bands, s.wTop));
       var bx = nicheBoxes(s.niches, s.h), inner = [];
       bx.forEach(function (b) {
         raw.forEach(function (t) {
@@ -3353,10 +3417,10 @@ window.TBstate = {
     if (!(W > 0) || !(H > 0) || !(tile > 0)) { svg.innerHTML = ''; cutEl.innerHTML = ''; noteEl.textContent = ''; return; }
     if (pat === 'diagonal' || pat === 'basket') {
       svg.style.display = 'block';
-      var dRects = fieldRects(W, H, T.trim, T.bands);
-      var dRaw = (pat === 'diagonal') ? diagonal2D(W, H, tw, th, grout, dRects)
-                                      : basket2D(W, H, tw, th, grout, dRects);
-      dRaw = dRaw.concat(bandTiles(W, H, grout, T.trim, T.bands));
+      var dSh = fieldShapes(W, H, T.trim, T.bands, T.wTop);
+      var dRaw = (pat === 'diagonal') ? diagonal2D(W, H, tw, th, grout, dSh)
+                                      : basket2D(W, H, tw, th, grout, dSh);
+      dRaw = dRaw.concat(bandTiles(W, H, grout, T.trim, T.bands, T.wTop));
       var dSplit = subtractNiches(dRaw, nicheBoxes(T.niches, H));
       var dTiles = dSplit.field.concat(dSplit.interior);
       annotate(dTiles, T.holes, H);
@@ -3371,8 +3435,8 @@ window.TBstate = {
     if (pat === 'hex') {
       svg.style.display = 'block';
       var across = Math.min(tw, th);
-      var hxRects = fieldRects(W, H, T.trim, T.bands);
-      var hxBands = bandTiles(W, H, grout, T.trim, T.bands);
+      var hxRects = fieldShapes(W, H, T.trim, T.bands, T.wTop);
+      var hxBands = bandTiles(W, H, grout, T.trim, T.bands, T.wTop);
       var hxb = nicheBoxes(T.niches, H);
       var hxFullA = 1.5 * Math.sqrt(3) * Math.pow(across / Math.sqrt(3), 2);
       var hxSplit = subtractNiches(hexTiles(W, H, across, grout, hxRects).concat(hxBands), hxb, hxFullA);
@@ -3387,7 +3451,7 @@ window.TBstate = {
     }
     if (pat === 'herring') {
       svg.style.display = 'block';
-      var hraw = herringbone2D(W, H, tw, th, fieldRects(W, H, T.trim, T.bands)).concat(bandTiles(W, H, grout, T.trim, T.bands));
+      var hraw = herringbone2D(W, H, tw, th, fieldShapes(W, H, T.trim, T.bands, T.wTop)).concat(bandTiles(W, H, grout, T.trim, T.bands, T.wTop));
       var hboxes = nicheBoxes(T.niches, H), hint = [];
       var hsplit = subtractNiches(hraw, hboxes);
       hboxes.forEach(function (b) {
@@ -3413,7 +3477,7 @@ window.TBstate = {
     }
     svg.style.display = 'block';
     var raw = fieldTiles(W, H, tw, th, grout, mode, pat, T.trim, T.bands, T.wTop);
-    var bandsT = bandTiles(W, H, grout, T.trim, T.bands);
+    var bandsT = bandTiles(W, H, grout, T.trim, T.bands, T.wTop);
     var boxes = nicheBoxes(T.niches, H);
     // the inside of a niche continues the wall's own grid — which is why landing the
     // opening on grout lines makes the interior come out in full tiles
@@ -3440,7 +3504,7 @@ window.TBstate = {
 
   // exposed so the self-test can drive the geometry directly, without the DOM
   window.TBEngine = {
-    layoutRegion: layoutRegion, fieldTiles: fieldTiles, fieldRects: fieldRects, bandTiles: bandTiles,
+    layoutRegion: layoutRegion, fieldTiles: fieldTiles, fieldRects: fieldRects, fieldShapes: fieldShapes, bandTiles: bandTiles,
     herringbone2D: herringbone2D, hexTiles: hexTiles, plankOf: plankOf,
     diagonal2D: diagonal2D, basket2D: basket2D,
     applyNiches: applyNiches, applyNichesPoly: applyNichesPoly, nicheBoxes: nicheBoxes, annotate: annotate,
@@ -3450,20 +3514,20 @@ window.TBstate = {
     // the exact composition render() uses, so the test checks the real thing
     compose: function (o) {
       var W = o.W, H = o.H, tw = o.tw, th = o.th, grout = o.grout, mode = o.mode || 'tile', pat = o.pat || 'straight';
-      var rects = fieldRects(W, H, o.trim, o.bands);
+      var rects = fieldShapes(W, H, o.trim, o.bands, o.wTop);
       var boxes = nicheBoxes(o.niches, H);
-      var bands = bandTiles(W, H, grout, o.trim, o.bands);
+      var bands = bandTiles(W, H, grout, o.trim, o.bands, o.wTop);
       var raw, tiles, acc = { dropped: 0 };
       if (pat === 'hex') {
         var ac = Math.min(tw, th), fA = 1.5 * Math.sqrt(3) * Math.pow(ac / Math.sqrt(3), 2);
         var sp = subtractNiches(hexTiles(W, H, ac, grout, rects, acc).concat(bands), boxes, fA, acc);
         tiles = sp.field.concat(sp.interior);
       } else if (pat === 'diagonal' || pat === 'basket') {
-        raw = ((pat === 'diagonal') ? diagonal2D(W, H, tw, th, grout, rects, acc) : basket2D(W, H, tw, th, grout, rects)).concat(bands);
+        raw = ((pat === 'diagonal') ? diagonal2D(W, H, tw, th, grout, rects, acc) : basket2D(W, H, tw, th, grout, rects, acc)).concat(bands);
         var sd = subtractNiches(raw, boxes, null, acc);
         tiles = sd.field.concat(sd.interior);
       } else if (pat === 'herring') {
-        raw = herringbone2D(W, H, tw, th, rects).concat(bands);
+        raw = herringbone2D(W, H, tw, th, rects, acc).concat(bands);
         var sh = subtractNiches(raw, boxes, null, acc);
         tiles = sh.field.concat(sh.interior);
       } else {
@@ -3472,7 +3536,8 @@ window.TBstate = {
         tiles = sg.field.concat(sg.interior);
       }
       annotate(tiles, o.holes, H);
-      return { tiles: tiles, cuts: buildCuts(tiles, tw, th), rects: rects, boxes: boxes, dropped: acc.dropped };
+      return { tiles: tiles, cuts: buildCuts(tiles, tw, th), rects: rects.rects, shapes: rects,
+               boxes: boxes, dropped: acc.dropped };
     }
   };
   function interiorOf(raw, boxes) {
@@ -4698,13 +4763,18 @@ window.TBstate = {
 
   function EXT(cfg) { return Math.max(cfg.W, cfg.wTop || 0); }
   function bandArea(cfg) {
-    var a = 0;
+    // a band on a leaning wall is a trapezoid, not a rectangle — the engine clips it
+    // to the same edge as everything else, so the expectation has to follow
+    var a = 0, tr = cfg.trim || {}, w = tr.w || 0, rIn = tr.r ? w : 0;
+    var lean = cfg.wTop && Math.abs(cfg.wTop - cfg.W) > 1e-9;
+    var e = function (y) { return lean ? (cfg.wTop + (cfg.W - cfg.wTop) * (y / cfg.H)) - rIn : cfg.W - rIn; };
     (cfg.bands || []).forEach(function (b) {
       if (!(b.h > 0)) return;
-      var tr = cfg.trim || {}, w = tr.w || 0;
-      var x0 = tr.l ? w : 0, x1 = cfg.W - (tr.r ? w : 0);
+      var x0 = tr.l ? w : 0;
       var y0 = Math.max(tr.t ? w : 0, cfg.H - b.y - b.h), y1 = Math.min(cfg.H - (tr.b ? w : 0), cfg.H - b.y);
-      if (y1 - y0 > 0.02 && x1 - x0 > 0.02) a += (x1 - x0) * (y1 - y0);
+      if (y1 - y0 <= 0.02) return;
+      var a0 = Math.max(0, e(y0) - x0), a1 = Math.max(0, e(y1) - x0);
+      a += (a0 + a1) / 2 * (y1 - y0);
     });
     return a;
   }
@@ -4802,7 +4872,7 @@ window.TBstate = {
     return fails;
   }
 
-  var PATS = ['straight', 'brick', 'thirds', 'vertical', 'sheet', 'herring', 'hex'];
+  var PATS = ['straight', 'brick', 'thirds', 'vertical', 'sheet', 'herring', 'hex', 'diagonal', 'basket'];
   var MODES = ['tile', 'joint', 'left'];
   function rnd(seed) { var x = Math.sin(seed) * 10000; return x - Math.floor(x); }
 
@@ -4826,8 +4896,8 @@ window.TBstate = {
       if (r(18) < 0.35) cfg.niches = [{ t: 'N', x: Math.floor(r(19) * cfg.W * 0.5) + 4, y: Math.floor(r(20) * cfg.H * 0.5) + 6,
         w: 8 + Math.floor(r(21) * 12), h: 8 + Math.floor(r(22) * 12), d: 3.5 }];
       if (r(23) < 0.35) cfg.holes = [{ t: 'Valve', x: r(24) * cfg.W, y: r(25) * cfg.H, d: [1.25, 2.5, 4.5][Math.floor(r(26) * 3)] }];
-      // out-of-square walls, only where the engine actually models the taper
-      if (r(27) < 0.3 && window.TBEngine.GRID[cfg.pat]) cfg.wTop = cfg.W + (r(28) - 0.5) * Math.min(6, cfg.W * 0.12);
+      // every pattern follows the lean now, so throw out-of-square walls at all of them
+      if (r(27) < 0.3) cfg.wTop = cfg.W + (r(28) - 0.5) * Math.min(6, cfg.W * 0.12);
       out.push(cfg);
     }
     return out;
