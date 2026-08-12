@@ -160,6 +160,19 @@
   .prefs-now { font-family: ui-monospace, Menlo, monospace; font-size: .74rem; color: var(--ink-faint); font-weight: 600; }
   .prefs-body { padding: 2px 14px 14px; display: flex; flex-direction: column; gap: 12px; }
   .prefs-body .unitbar { margin-top: 0; }
+
+  /* The optional extras sit closed. A shower usually has a niche and some holes;
+     it rarely has all five. Each one says what it is holding so you never have to
+     open it to find out. */
+  .fold > .label { cursor: pointer; display: flex; align-items: center; gap: 8px; margin-bottom: 0; }
+  .fold > .label::after { content: "+"; margin-left: auto; font-size: 1.15rem; font-weight: 700;
+                          color: var(--chalk); line-height: 1; transition: .15s; }
+  .fold.open > .label::after { content: "−"; }
+  .fold > .fold-body { display: none; margin-top: 14px; }
+  .fold.open > .fold-body { display: block; }
+  .fold-count { font-size: .68rem; font-weight: 700; font-family: ui-monospace, Menlo, monospace;
+                background: var(--chalk); color: var(--ground); border-radius: 20px; padding: 2px 8px; }
+  .fold-count.none { background: transparent; color: var(--ink-faint); font-weight: 600; }
   .unitbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: -6px; }
   .unitbar .seg button { padding: 7px 13px; font-size: .84rem; }
   #tile-swap { padding: 10px 12px; font-size: 1.05rem; line-height: 1; border-style: solid; }
@@ -644,11 +657,7 @@
     <div class="card">
       <p class="label">The job <span class="hint">tap a surface to lay it out</span></p>
       <div id="surf-list"></div>
-      <div class="addrow">
-        <button class="btn-ghost" id="add-wall" type="button">+ Wall</button>
-        <button class="btn-ghost" id="add-floor" type="button">+ Floor</button>
-        <button class="btn-ghost" id="add-curb" type="button">+ Curb</button>
-      </div>
+      <div class="addrow" id="surf-adds"></div>
       <div class="dgm" data-dgm="curb" hidden></div>
       <p class="field-hint" id="curb-hint" hidden>A curb is three faces — <b>top, outside, inside</b> — added together and sharing a length. Pitch the top <b>1/8″ toward the inside</b> so water drains back in, and keep the front and side pieces parallel to that pitch. Walls usually go first, so trim the curb length about <b>3/8″ at each end</b> to drop in between the tiled walls.</p>
     </div>
@@ -675,19 +684,6 @@
         <div class="chips" id="grout-chips"></div>
         <div class="dgm" data-dgm="grout"></div>
       </div>
-    </div>
-    <div class="card">
-      <p class="label">Pattern <span class="hint">see the layouts</span></p>
-      <div class="pat-gallery" id="pat-gallery"></div>
-      <div class="pat-preview">
-        <svg id="pat-preview-svg" viewBox="0 0 48 48" aria-hidden="true"></svg>
-        <div>
-          <div class="pname" id="pat-name">—</div>
-          <div class="pdesc" id="pat-desc"></div>
-          <div class="pwaste" id="pat-waste"></div>
-        </div>
-      </div>
-      <p class="pat-note">The dry lay below sizes cuts for the <b>straight &amp; offset</b> family (straight, running bond, thirds, vertical). Herringbone and the angled patterns lay differently — their cut math is on the way.</p>
     </div>
     </div>
     <div class="step" data-step="3" data-title="This surface">
@@ -824,6 +820,19 @@
       <div class="stat"><div class="num mono" id="s-total">—</div><div class="cap">Tiles / row</div></div>
     </div>
 
+    <div class="card">
+      <p class="label">Pattern <span class="hint">see the layouts</span></p>
+      <div class="pat-gallery" id="pat-gallery"></div>
+      <div class="pat-preview">
+        <svg id="pat-preview-svg" viewBox="0 0 48 48" aria-hidden="true"></svg>
+        <div>
+          <div class="pname" id="pat-name">—</div>
+          <div class="pdesc" id="pat-desc"></div>
+          <div class="pwaste" id="pat-waste"></div>
+        </div>
+      </div>
+      <p class="pat-note">The dry lay below sizes cuts for the <b>straight &amp; offset</b> family (straight, running bond, thirds, vertical). Herringbone and the angled patterns lay differently — their cut math is on the way.</p>
+    </div>
     <div class="card">
       <p class="label">The whole <span id="surf-word">wall</span> <span class="hint">every cut, laid out</span></p>
       <svg class="surf2d" id="surf2d" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
@@ -1480,15 +1489,18 @@ window.TBstate = {
     var a = A();
     showSize();
     document.getElementById('lbl-width').textContent = 'Width';
-    document.getElementById('lbl-height').textContent = /floor|pan/i.test(a.t) ? 'Depth' : 'Height';
+    document.getElementById('lbl-height').textContent = isFloor() ? 'Depth' : 'Height';
     document.getElementById('active-label').innerHTML = a.t + ' &middot; size';
     var sn = document.getElementById('sect-surface-name');
     if (sn) sn.textContent = a.t + (isFloor() ? ' — a floor' : /curb/i.test(a.t) ? ' — a curb face' : ' — a wall');
     var ch = document.getElementById('curb-hint');
     if (ch) ch.hidden = !state.surfaces.some(function (s) { return /curb/i.test(s.t); });
-    // niches and bands are wall features; a floor has neither
+    // bands turn up on any wall — a backsplash, a fireplace surround. A niche is a
+    // recessed shampoo box, so it only belongs in a shower (or a custom job, which
+    // is the bucket a tub surround lands in).
     var wallLike = !isFloor() && !/curb/i.test(a.t);
-    var nc = document.getElementById('niche-add'); if (nc) nc.closest('.card').hidden = !wallLike;
+    var showerish = state.job === 'shower' || state.job === 'custom';
+    var nc = document.getElementById('niche-add'); if (nc) nc.closest('.card').hidden = !(wallLike && showerish);
     var bc = document.getElementById('band-add'); if (bc) bc.closest('.card').hidden = !wallLike;
     renderHoleAdd(); renderHoles(); renderNiches(); renderTrim(); renderBands(); renderHeat();
   }
@@ -1499,7 +1511,7 @@ window.TBstate = {
       b.setAttribute('aria-pressed', state.job === j[0] ? 'true' : 'false');
       b.addEventListener('click', function () {
         state.job = j[0]; state.surfaces = jobSurfaces(j[0]); state.active = 0; state.mode = null;
-        renderJobs(); renderSurfList(); loadActive(); sync();
+        renderJobs(); renderAdds(); renderSurfList(); loadActive(); sync();
       });
       host.appendChild(b);
     });
@@ -1796,11 +1808,11 @@ window.TBstate = {
     if (!a.heat) a.heat = { on: false, setback: 3, wpsf: 12, volts: 120, excl: [] };
     return a.heat;
   }
-  function isFloor() { return /floor|pan/i.test(A().t); }
+  function isFloor() { return /floor|pan|threshold|saddle|hearth|curb top/i.test(A().t); }
   function renderHeat() {
     var card = document.getElementById('heat-card');
     if (!card) return;
-    card.hidden = !isFloor();
+    card.hidden = !/floor|pan/i.test(A().t);   // a threshold or a hearth is not getting heat
     if (card.hidden) return;
     var h = heatOf(), a = A(), U = window.TBU;
     var tg = document.getElementById('heat-toggle'); tg.innerHTML = '';
@@ -1881,17 +1893,150 @@ window.TBstate = {
     heatOf().setback = window.TBU.toIn(parseFloat(e.target.value) || 0); heatReport();
   });
 
-  document.getElementById('add-wall').addEventListener('click', function () { state.surfaces.push(newSurface('Wall ' + (state.surfaces.length + 1), 48, 84)); state.active = state.surfaces.length - 1; state.job = 'custom'; renderJobs(); renderSurfList(); loadActive(); sync(); });
-  document.getElementById('add-floor').addEventListener('click', function () { state.surfaces.push(newSurface('Floor ' + (state.surfaces.length + 1), 60, 60)); state.active = state.surfaces.length - 1; state.job = 'custom'; renderJobs(); renderSurfList(); loadActive(); sync(); });
+  /* What you can add depends on the job. A floor has no walls to tile; a
+     backsplash has no pan or curb. Offering all of them on every job is how a
+     simple layout starts looking complicated. */
+  var ADDS = {
+    shower:     ['wall', 'floor', 'curb'],
+    floor:      ['floor', 'curb', 'threshold'],
+    backsplash: ['wall'],
+    fireplace:  ['wall', 'hearth'],
+    custom:     ['wall', 'floor', 'curb', 'threshold', 'hearth']
+  };
+  var ADD_DEF = {
+    wall:      ['+ Wall', 'Wall', 48, 84],
+    floor:     ['+ Floor', 'Floor', 60, 60],
+    hearth:    ['+ Hearth', 'Hearth', 60, 20],
+    threshold: ['+ Threshold', 'Threshold', 36, 5]
+  };
+  function renderAdds() {
+    var host = document.getElementById('surf-adds');
+    if (!host) return;
+    host.innerHTML = '';
+    (ADDS[state.job] || ADDS.custom).forEach(function (k) {
+      var b = document.createElement('button');
+      b.className = 'btn-ghost'; b.type = 'button';
+      if (k === 'curb') {
+        b.textContent = '+ Curb';
+        b.addEventListener('click', addCurb);
+      } else {
+        var d = ADD_DEF[k];
+        b.textContent = d[0];
+        b.addEventListener('click', function () {
+          state.surfaces.push(newSurface(d[1] + ' ' + (state.surfaces.length + 1), d[2], d[3]));
+          state.active = state.surfaces.length - 1; state.job = 'custom';
+          renderJobs(); renderAdds(); renderSurfList(); loadActive(); sync();
+        });
+      }
+      host.appendChild(b);
+    });
+  }
   // a curb is three faces sharing one length — top, outside, inside
-  document.getElementById('add-curb').addEventListener('click', function () {
+  function addCurb() {
     var L = 60, hi = 6, dp = 4.5;
     state.surfaces.push(newSurface('Curb top', L, dp));
     state.surfaces.push(newSurface('Curb outside', L, hi));
     state.surfaces.push(newSurface('Curb inside', L, hi));
     state.active = state.surfaces.length - 3; state.job = 'custom';
-    renderJobs(); renderSurfList(); loadActive(); sync();
+    renderJobs(); renderAdds(); renderSurfList(); loadActive(); sync();
+  }
+
+  /* ---- heated floor ----
+     Electric mats and cables are made to a fixed length. You pick the biggest standard
+     size that FITS inside the heated area; anything bigger simply will not go down.
+     Nothing permanent sits on top of heat, so fixtures come out of the area first. */
+  var MAT_SIZES = [10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 120, 140, 150];
+  var EXCL_KINDS = [['Toilet', 20, 14], ['Vanity', 36, 21], ['Tub', 60, 30], ['Shower base', 60, 36], ['Other', 24, 24]];
+  function heatOf() {
+    var a = A();
+    if (!a.heat) a.heat = { on: false, setback: 3, wpsf: 12, volts: 120, excl: [] };
+    return a.heat;
+  }
+  function isFloor() { return /floor|pan|threshold|saddle|hearth|curb top/i.test(A().t); }
+  function renderHeat() {
+    var card = document.getElementById('heat-card');
+    if (!card) return;
+    card.hidden = !/floor|pan/i.test(A().t);   // a threshold or a hearth is not getting heat
+    if (card.hidden) return;
+    var h = heatOf(), a = A(), U = window.TBU;
+    var tg = document.getElementById('heat-toggle'); tg.innerHTML = '';
+    [['off', 'No heat'], ['on', 'Heated']].forEach(function (o) {
+      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = o[1];
+      b.setAttribute('aria-pressed', (h.on ? 'on' : 'off') === o[0] ? 'true' : 'false');
+      b.addEventListener('click', function () { h.on = o[0] === 'on'; renderHeat(); });
+      tg.appendChild(b);
+    });
+    document.getElementById('heat-body').hidden = !h.on;
+    if (!h.on) return;
+    document.getElementById('heat-setback').value = U.num(h.setback);
+    var wh = document.getElementById('heat-w'); wh.innerHTML = '';
+    [12, 15].forEach(function (v) {
+      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = v + ' W/sq ft';
+      b.setAttribute('aria-pressed', h.wpsf === v ? 'true' : 'false');
+      b.addEventListener('click', function () { h.wpsf = v; renderHeat(); });
+      wh.appendChild(b);
+    });
+    var vh = document.getElementById('heat-v'); vh.innerHTML = '';
+    [120, 240].forEach(function (v) {
+      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = v + 'V';
+      b.setAttribute('aria-pressed', h.volts === v ? 'true' : 'false');
+      b.addEventListener('click', function () { h.volts = v; renderHeat(); });
+      vh.appendChild(b);
+    });
+    var ea = document.getElementById('heat-excl-add'); ea.innerHTML = '';
+    EXCL_KINDS.forEach(function (k) {
+      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = '+ ' + k[0];
+      b.addEventListener('click', function () { h.excl.push({ t: k[0], w: k[1], d: k[2] }); renderHeat(); });
+      ea.appendChild(b);
+    });
+    var el = document.getElementById('heat-excl'); el.innerHTML = '';
+    if (!h.excl.length) el.innerHTML = '<p class="niche-empty">Nothing excluded — the whole floor inside the setback gets heat.</p>';
+    h.excl.forEach(function (x, i) {
+      var row = document.createElement('div'); row.className = 'hole-row';
+      row.innerHTML = '<span class="hname">' + x.t + '</span>' +
+        '<input type="number" step="0.5" min="0" inputmode="decimal" value="' + U.num(x.w) + '" aria-label="Width">' +
+        '<input type="number" step="0.5" min="0" inputmode="decimal" value="' + U.num(x.d) + '" aria-label="Depth">' +
+        '<span class="times">×</span>' +
+        '<button class="del" type="button" aria-label="Remove">×</button>';
+      var ins = row.querySelectorAll('input');
+      ins[0].addEventListener('input', function () { x.w = U.toIn(parseFloat(ins[0].value) || 0); heatReport(); });
+      ins[1].addEventListener('input', function () { x.d = U.toIn(parseFloat(ins[1].value) || 0); heatReport(); });
+      row.querySelector('.del').addEventListener('click', function () { h.excl.splice(i, 1); renderHeat(); });
+      el.appendChild(row);
+    });
+    heatReport();
+  }
+  function heatReport() {
+    var el = document.getElementById('heat-report');
+    if (!el) return;
+    var h = heatOf(), a = A();
+    var inner = Math.max(0, a.w - 2 * h.setback) * Math.max(0, a.h - 2 * h.setback) / 144;
+    var ex = 0; h.excl.forEach(function (x) { ex += (x.w * x.d) / 144; });
+    var heatable = Math.max(0, inner - ex);
+    var mat = 0;
+    for (var i = MAT_SIZES.length - 1; i >= 0; i--) if (MAT_SIZES[i] <= heatable + 1e-9) { mat = MAT_SIZES[i]; break; }
+    var watts = Math.round(mat * h.wpsf), amps = watts / h.volts;
+    // floor heat runs for hours, so it is a continuous load: a 15 A thermostat/circuit
+    // is only good for 12 A of it. Sizing to the raw 15 would be over the code limit.
+    var stats = Math.max(1, Math.ceil(amps / 12));
+    var gross = (a.w * a.h) / 144;
+    if (!(heatable > 0)) {
+      el.innerHTML = '<span style="color:var(--warn)">Nothing left to heat once the setback and the fixtures come out. Shrink the setback or the exclusions.</span>';
+      return;
+    }
+    el.innerHTML =
+      'Floor is <b>' + gross.toFixed(1) + ' sq ft</b>; inside a ' + toDim(h.setback) + ' setback and minus what sits on it, <b>' +
+      heatable.toFixed(1) + ' sq ft</b> can take heat.<br>' +
+      (mat ? 'Order the <b>' + mat + ' sq ft</b> mat — the largest standard size that fits. ' +
+        '<b>' + watts + ' W</b> at ' + h.wpsf + ' W/sq ft, <b>' + amps.toFixed(1) + ' A</b> on ' + h.volts + 'V' +
+        (stats > 1 ? ' — past what one 15 A thermostat may carry continuously (12 A), so you need <b>' + stats + '</b> of them, or a contactor.' : ' — inside the 12 A a 15 A thermostat may carry continuously, so one does it.') +
+        '<br><span class="muted">Leaves ' + (heatable - mat).toFixed(1) + ' sq ft unheated at the edges. That is normal: you can never cut the cable to make up a shortfall.</span>'
+        : '<span style="color:var(--warn)">Heated area is under the smallest standard mat (' + MAT_SIZES[0] + ' sq ft) — this floor wants loose cable, not a mat.</span>');
+  }
+  document.getElementById('heat-setback').addEventListener('input', function (e) {
+    heatOf().setback = window.TBU.toIn(parseFloat(e.target.value) || 0); heatReport();
   });
+
 
   window.TBstate.register('layout', function () {
     return { job: state.job, surfaces: JSON.parse(JSON.stringify(state.surfaces)), active: state.active, tw: state.tw, th: state.th, grout: state.grout, mode: state.mode };
@@ -1901,11 +2046,11 @@ window.TBstate = {
     state.th = v.th !== undefined ? v.th : (v.tile || 12);
     state.grout = v.grout; state.mode = v.mode;
     showTile();
-    renderJobs(); renderSurfList(); loadActive(); sync();
+    renderJobs(); renderAdds(); renderSurfList(); loadActive(); sync();
   });
 
   window.addEventListener('resize', function () { render(); });
-  showTile();
+  showTile(); renderAdds();
   renderHoleAdd(); renderNicheAdd(); renderBandAdd(); renderJobs(); renderSurfList(); loadActive(); sync();
 })();
 
@@ -3993,6 +4138,57 @@ window.TBstate = {
   }
   ['click', 'tb-units'].forEach(function (ev) { window.addEventListener(ev, function () { setTimeout(say, 0); }, true); });
   say();
+})();
+
+
+/* ============ FOLDING THE OPTIONAL EXTRAS ============
+   Holes, niches, bands, trim and heat are all optional. Leaving five open cards
+   on screen makes a simple job look complicated, so they start closed and each
+   header carries a count — you can see what's in them without opening one. */
+(function () {
+  var SPEC = [
+    { host: 'hole-add',  label: 'Holes & penetrations', hint: 'valve, head, spout, drain',
+      count: function () { return document.querySelectorAll('#hole-list .hole-row').length; } },
+    { host: 'niche-add', label: 'Niches & recesses', hint: 'a hole in the field, with its own layout',
+      count: function () { return document.querySelectorAll('#niche-list .niche-item').length; } },
+    { host: 'band-add',  label: 'Accent bands', hint: 'a feature row across the wall',
+      count: function () { return document.querySelectorAll('#band-list .band-item').length; } },
+    { host: 'trim-type', label: 'Edge trim', hint: 'decide this early — it changes the field',
+      count: function () { return document.querySelectorAll('#trim-edges .chip[aria-pressed="true"]').length; } },
+    { host: 'heat-toggle', label: 'Heated floor', hint: 'electric mat or cable',
+      count: function () { var b = document.getElementById('heat-body'); return b && !b.hidden ? 1 : 0; } }
+  ];
+  var made = [];
+  SPEC.forEach(function (sp) {
+    var anchor = document.getElementById(sp.host);
+    if (!anchor) return;
+    var card = anchor.closest('.card');
+    if (!card || card.classList.contains('fold')) return;
+    var lab = card.querySelector('.label');
+    if (!lab) return;
+    card.classList.add('fold');
+    // everything under the header becomes the body
+    var body = document.createElement('div');
+    body.className = 'fold-body';
+    while (lab.nextSibling) body.appendChild(lab.nextSibling);
+    card.appendChild(body);
+    var badge = document.createElement('span');
+    badge.className = 'fold-count none';
+    lab.appendChild(badge);
+    lab.addEventListener('click', function () { card.classList.toggle('open'); });
+    made.push({ card: card, badge: badge, count: sp.count });
+  });
+  function refresh() {
+    made.forEach(function (m) {
+      var n = 0;
+      try { n = m.count() || 0; } catch (e) {}
+      m.badge.textContent = n ? n : 'none';
+      m.badge.className = 'fold-count' + (n ? '' : ' none');
+      if (n && !m.card.classList.contains('open')) m.card.classList.add('open');   // don't hide real content
+    });
+  }
+  window.addEventListener('tb-change', refresh);
+  refresh();
 })();
 
 /* ============ STEP FLOW ============ */
