@@ -667,10 +667,15 @@
     <div class="sect"><span class="sect-n">2</span><span class="sect-t">The tile</span><span class="sect-h">every surface uses this</span></div>
     <div class="card">
       <div class="field">
-        <p class="label">Tile size <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-faint)">(across × up, as it sits)</span></p>
+        <p class="label">Tile shape</p>
+        <div class="chips" id="shape-chips"></div>
+        <p class="field-hint" id="shape-hint"></p>
+      </div>
+      <div class="field">
+        <p class="label" id="tile-size-label">Tile size <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-faint)">(across × up, as it sits)</span></p>
         <div class="row">
           <input type="text" id="tile" value="12" inputmode="decimal" autocomplete="off" aria-label="Tile width">
-          <span class="unit">&times;</span>
+          <span class="unit unit-x">&times;</span>
           <input type="text" id="tile-h" value="12" inputmode="decimal" autocomplete="off" aria-label="Tile height">
           <span class="unit unit-label">in</span>
           <button class="btn-ghost" id="tile-swap" type="button" title="Turn the tile 90°" aria-label="Turn the tile 90 degrees">&#8635;</button>
@@ -912,7 +917,7 @@
       <div id="map-boxes-ui">
         <div class="trim-row"><span class="pv-lbl">The main room</span>
           <input type="number" id="room-w" step="0.5" min="1" inputmode="decimal" value="144">
-          <span class="unit">&times;</span>
+          <span class="unit unit-x">&times;</span>
           <input type="number" id="room-d" step="0.5" min="1" inputmode="decimal" value="120">
           <span class="unit unit-label">in</span>
         </div>
@@ -978,8 +983,8 @@
     </div>
 
     <div class="card">
-      <p class="label">Pattern <span class="hint">sets the waste factor</span></p>
-      <div class="chips" id="patterns"></div>
+      <p class="label">Pattern <span class="hint">follows the Layout tab</span></p>
+      <div id="pattern-echo" class="trim-report"></div>
       <div class="waste-edit">
         <label for="waste">Waste factor</label>
         <input type="number" id="waste" value="10" min="0" max="60" step="1" inputmode="numeric">
@@ -1242,7 +1247,10 @@ window.TBstate = {
   // stored y is always off the near edge; a floor shows it off the back wall instead
   function yIn(a, shown) { return isFloor() ? Math.max(0, a.h - shown) : shown; }
   function yOut(a, stored) { return isFloor() ? Math.max(0, a.h - stored) : stored; }
-  var state = { job: 'shower', surfaces: jobSurfaces('shower'), active: 0, tw: 12, th: 12, grout: 0.125, mode: null };
+  var state = { job: 'shower', surfaces: jobSurfaces('shower'), active: 0, tw: 12, th: 12, grout: 0.125, mode: null, shape: 'rect' };
+  /* Shape and pattern are different questions, and running them together was wrong:
+     hexagon and mosaic sheet are what the tile IS, not how you lay it. */
+  var SHAPES = [['rect', 'Square or plank'], ['hex', 'Hexagon'], ['sheet', 'Mosaic sheet']];
   function A() { return state.surfaces[state.active] || { t: 'Surface', w: 0, h: 0 }; }
 
   function toDim(x) { return window.TBU.fmt(x); }
@@ -1338,7 +1346,7 @@ window.TBstate = {
     document.getElementById('s-total').textContent = r.tiles.length;
 
     window.TB = {
-      wall: A().w, height: A().h, tile: state.tw, tw: state.tw, th: state.th, grout: grout, mode: active,
+      wall: A().w, height: A().h, tile: state.tw, tw: state.tw, th: state.th, grout: grout, mode: active, shape: state.shape,
       surface: (/floor|pan/i.test(A().t) ? 'floor' : 'wall'),
       pattern: (window.TB && window.TB.pattern) || 'straight',
       holes: (A().holes || []).slice(),
@@ -1413,6 +1421,38 @@ window.TBstate = {
   function showTile() {
     document.getElementById('tile').value = fmtFrac(state.tw);
     document.getElementById('tile-h').value = fmtFrac(state.th);
+  }
+  function renderShape() {
+    var host = document.getElementById('shape-chips');
+    if (!host) return;
+    host.innerHTML = '';
+    SHAPES.forEach(function (k) {
+      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = k[1];
+      b.setAttribute('aria-pressed', state.shape === k[0] ? 'true' : 'false');
+      b.addEventListener('click', function () {
+        state.shape = k[0];
+        if (k[0] === 'hex') state.th = state.tw;             // a hex is one dimension
+        state.mode = null; renderShape(); sync();
+        window.dispatchEvent(new Event('tb-shape'));
+      });
+      host.appendChild(b);
+    });
+    var lab = document.getElementById('tile-size-label'), hint = document.getElementById('shape-hint');
+    var second = document.getElementById('tile-h'), swap = document.getElementById('tile-swap');
+    var hexish = state.shape === 'hex';
+    if (second) second.style.display = hexish ? 'none' : '';
+    if (swap) swap.style.display = hexish ? 'none' : '';
+    [].slice.call(document.querySelectorAll('#tile-size-label .unit-x')).forEach(function (e) { e.style.display = hexish ? 'none' : ''; });
+    if (lab) lab.innerHTML = hexish
+      ? 'Hex size <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-faint)">(across the flats)</span>'
+      : state.shape === 'sheet'
+        ? 'Sheet size <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-faint)">(the mesh sheet, not one piece)</span>'
+        : 'Tile size <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-faint)">(across × up, as it sits)</span>';
+    if (hint) hint.innerHTML = hexish
+      ? 'Hexagons lay in offset rows — there is no pattern to pick, and every edge piece is an angled cut.'
+      : state.shape === 'sheet'
+        ? 'Penny rounds, small hex, tiny squares. You cut the <b>sheet</b> and trim the mesh — the pieces stay whole.'
+        : 'A square or a plank. Rectangular tile unlocks herringbone and basketweave.';
   }
   function showSize() {
     var U = window.TBU, a = A();
@@ -2039,18 +2079,18 @@ window.TBstate = {
 
 
   window.TBstate.register('layout', function () {
-    return { job: state.job, surfaces: JSON.parse(JSON.stringify(state.surfaces)), active: state.active, tw: state.tw, th: state.th, grout: state.grout, mode: state.mode };
+    return { job: state.job, surfaces: JSON.parse(JSON.stringify(state.surfaces)), active: state.active, tw: state.tw, th: state.th, grout: state.grout, mode: state.mode, shape: state.shape };
   }, function (v) {
     state.job = v.job; state.surfaces = v.surfaces; state.active = v.active || 0;
     state.tw = v.tw !== undefined ? v.tw : (v.tile || 12);      // jobs saved before planks existed
     state.th = v.th !== undefined ? v.th : (v.tile || 12);
-    state.grout = v.grout; state.mode = v.mode;
-    showTile();
+    state.grout = v.grout; state.mode = v.mode; state.shape = v.shape || 'rect';
+    showTile(); renderShape();
     renderJobs(); renderAdds(); renderSurfList(); loadActive(); sync();
   });
 
   window.addEventListener('resize', function () { render(); });
-  showTile(); renderAdds();
+  showTile(); renderShape(); renderAdds();
   renderHoleAdd(); renderNicheAdd(); renderBandAdd(); renderJobs(); renderSurfList(); loadActive(); sync();
 })();
 
@@ -2122,20 +2162,27 @@ window.TBstate = {
       host.appendChild(row);
     });
   }
+  /* There used to be a second pattern picker here. Pick herringbone on the Layout tab
+     and this one still said straight — so the app ordered 10% waste for an 18% job.
+     One pattern, chosen once; the percentage stays editable as an override. */
+  var touched = false;
+  document.getElementById('waste').addEventListener('input', function () { touched = true; });
   function renderPatterns() {
-    var host = document.getElementById('patterns'); host.innerHTML = '';
-    PATTERNS.forEach(function (p) {
-      var b = document.createElement('button');
-      b.className = 'chip'; b.type = 'button';
-      b.setAttribute('aria-pressed', state.pattern === p.id ? 'true' : 'false');
-      b.innerHTML = p.name + ' <small>' + p.waste + '%</small>';
-      b.addEventListener('click', function () {
-        state.pattern = p.id; state.waste = p.waste;
-        document.getElementById('waste').value = p.waste; renderPatterns(); compute();
-      });
-      host.appendChild(b);
-    });
+    var echo = document.getElementById('pattern-echo');
+    if (!echo) return;
+    var id = (window.TB || {}).pattern || 'straight';
+    var p = PATTERNS.filter(function (x) { return x.id === id; })[0];
+    var nm = p ? p.name : ({ hex: 'Hexagon', sheet: 'Mosaic sheet', vertical: 'Vertical' }[id] || id);
+    var w = p ? p.waste : ({ hex: 15, sheet: 12, vertical: 10 }[id] || 10);
+    if (state.pattern !== id) {                 // the choice moved — follow it
+      state.pattern = id;
+      if (!touched) { state.waste = w; document.getElementById('waste').value = w; }
+    }
+    echo.innerHTML = '<b>' + nm + '</b> — about <b>' + w + '%</b> waste' +
+      (touched && state.waste !== w ? ' (you have set ' + state.waste + '%)' : '') +
+      '. <span class="muted">Change it on the Layout tab.</span>';
   }
+  window.addEventListener('tb-change', function () { renderPatterns(); compute(); });
   /* Waterproofing quantities come OUT of the job rather than being asked for again:
      wall and floor areas, the corners where planes meet, and one seal per penetration. */
   function split() {
@@ -2441,22 +2488,44 @@ window.TBstate = {
     { id: 'brick', name: 'Running bond', waste: 10, desc: 'Each row shifts half a tile — the standard brick offset. Hides a little lippage.', draw: function () { return gridP(3, 'brick'); } },
     { id: 'thirds', name: 'Third bond', waste: 12, desc: 'Each row shifts a third. The go-to for long plank tile.', draw: function () { return gridP(3, 'thirds'); } },
     { id: 'vertical', name: 'Vertical', waste: 10, desc: 'Stacked in columns — draws the eye up, makes a wall feel taller.', draw: function () { return gridP(3, 'vertical'); } },
-    { id: 'herring', name: 'Herringbone', waste: 18, desc: 'Planks interlock at 90° in a zigzag. All angled cuts — the priciest to set.', draw: herringP },
+    { id: 'herring', name: 'Herringbone', waste: 18, desc: 'Planks interlock at 90° in a zigzag. All angled cuts — the priciest to set.', draw: herringP, needs: 'plank' },
     { id: 'diagonal', name: 'Diagonal', waste: 15, desc: 'The grid turned on point, 45°. More cuts at every wall.', draw: diagonalP },
-    { id: 'basket', name: 'Basketweave', waste: 12, desc: 'Pairs woven over-and-under — a classic bath-floor look.', draw: basketP },
-    { id: 'pinwheel', name: 'Pinwheel', waste: 15, desc: 'A small tile spun inside four larger ones. Also called hopscotch.', draw: pinwheelP },
-    { id: 'hex', name: 'Hexagon', waste: 15, desc: 'Six-sided tile in offset rows. Size is measured across the flats. Every edge piece is an angled cut.', draw: hexP },
-    { id: 'sheet', name: 'Mosaic sheet', waste: 12, desc: 'Penny rounds, small hex, tiny squares — sold on mesh sheets. You cut the sheet, not the pieces.', draw: sheetP }
+    { id: 'basket', name: 'Basketweave', waste: 12, desc: 'Pairs woven over-and-under — a classic bath-floor look.', draw: basketP, needs: 'plank' },
+    { id: 'pinwheel', name: 'Pinwheel', waste: 15, desc: 'A small tile spun inside four larger ones. Also called hopscotch.', draw: pinwheelP, needs: 'two' }
   ];
+  /* You cannot lay a square tile in herringbone or basketweave — those need a plank.
+     Pinwheel needs two different sizes. Rather than let someone pick a layout their
+     tile can't make, the ones that don't apply drop out and say why. */
+  function plank(tw, th) { return Math.abs(tw - th) > Math.max(0.05, Math.min(tw, th) * 0.02); }
+  function applies(p, tw, th, shape) {
+    if (shape !== 'rect') return false;
+    if (p.needs === 'plank') return plank(tw, th);
+    if (p.needs === 'two') return false;               // we model one tile size
+    if (p.id === 'vertical') return plank(tw, th);     // on a square it IS straight
+    return true;
+  }
+  function whyNot(p, tw, th) {
+    if (p.needs === 'two') return p.name + ' needs two tile sizes';
+    if (p.id === 'vertical') return 'Vertical is the same as straight on a square tile';
+    return p.name + ' needs a plank, not a square';
+  }
 
   var gal = document.getElementById('pat-gallery');
+  var note = document.querySelector('.pat-note');
+  var prev = document.querySelector('.pat-preview');
   var svg = document.getElementById('pat-preview-svg');
   var nm = document.getElementById('pat-name'), dc = document.getElementById('pat-desc'), ws = document.getElementById('pat-waste');
   var current = 'straight';
 
-  function select(id) {
+  function select(id, quiet) {
     var p = null; for (var i = 0; i < PATS.length; i++) if (PATS[i].id === id) p = PATS[i];
-    if (!p) return;
+    if (!p) {                                   // hex / sheet come from the shape, not the gallery
+      current = id;
+      window.TB = window.TB || {}; window.TB.pattern = id;
+      if (!quiet) window.dispatchEvent(new Event('tb-change'));
+      else setTimeout(function () { window.dispatchEvent(new Event('tb-change')); }, 0);
+      return;
+    }
     current = id;
     svg.innerHTML = p.draw();
     nm.textContent = p.name;
@@ -2467,16 +2536,43 @@ window.TBstate = {
     window.dispatchEvent(new Event('tb-change'));
   }
 
-  PATS.forEach(function (p) {
-    var b = document.createElement('button');
-    b.className = 'pswatch'; b.type = 'button'; b.dataset.id = p.id;
-    b.setAttribute('aria-pressed', p.id === current ? 'true' : 'false');
-    b.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true">' + p.draw() + '</svg><span class="pl">' + p.name + '</span>';
-    b.addEventListener('click', function () { select(p.id); });
-    gal.appendChild(b);
-  });
+  function buildGallery() {
+    var T = window.TB || {}, tw = T.tw || 12, th = T.th || 12, shape = T.shape || 'rect';
+    gal.innerHTML = '';
+    var shown = [], hidden = [];
+    PATS.forEach(function (p) { (applies(p, tw, th, shape) ? shown : hidden).push(p); });
+    if (shape !== 'rect') {
+      gal.innerHTML = '';
+      note.innerHTML = shape === 'hex'
+        ? 'Hexagons lay one way — offset rows. There is no pattern to choose.'
+        : 'Mosaic sheets go down as a grid of sheets. There is no pattern to choose.';
+      prev.style.display = 'none';
+      if (current !== shape) select(shape, true);
+      return;
+    }
+    prev.style.display = '';
+    shown.forEach(function (p) {
+      var b = document.createElement('button');
+      b.className = 'pswatch'; b.type = 'button'; b.dataset.id = p.id;
+      b.setAttribute('aria-pressed', p.id === current ? 'true' : 'false');
+      b.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true">' + p.draw() + '</svg><span class="pl">' + p.name + '</span>';
+      b.addEventListener('click', function () { select(p.id); });
+      gal.appendChild(b);
+    });
+    // if the tile changed under the current pick, fall back to something it can do
+    if (!shown.some(function (p) { return p.id === current; })) select('straight', true);
+    note.innerHTML = 'The cut math covers the <b>straight &amp; offset</b> family and herringbone. Diagonal, basketweave and pinwheel show a preview only — their cut geometry is still to come.' +
+      (hidden.length ? '<br><span style="color:var(--amber)">Not with this tile: ' +
+        hidden.map(function (p) { return whyNot(p, tw, th); }).join(' · ') + '.</span>' : '');
+  }
+  buildGallery();
+  window.addEventListener('tb-shape', buildGallery);
   window.TBstate.register('gallery', function () { return current; }, function (v) { if (v) select(v); });
   select('straight');
+  window.addEventListener('tb-change', function () {
+    var T = window.TB || {}, k = (T.tw || 12) + 'x' + (T.th || 12) + '/' + (T.shape || 'rect');
+    if (k !== buildGallery.last) { buildGallery.last = k; buildGallery(); }
+  });
 })();
 
 /* ============ WHOLE-SURFACE 2D layout + cut list ============ */
@@ -3365,6 +3461,17 @@ window.TBstate = {
     if (pat === 'diagonal') {
       return '<g transform="rotate(45 ' + (W / 2).toFixed(1) + ' ' + (H / 2).toFixed(1) + ')">' + gridFill(-W, -H, 2 * W, 2 * H, u, 'straight', g) + '</g>';
     }
+    if (state.aspect && Math.abs(state.aspect - 1) > 0.02) {   // planks draw as planks
+      var m2 = '', uh = u / state.aspect;
+      for (var r2 = -1; r2 * uh < H + uh; r2++) {
+        for (var c2 = -2; c2 * u < W + u; c2++) {
+          var xx = c2 * u + (pat === 'brick' && (((r2 % 2) + 2) % 2) ? u / 2 : 0)
+                          + (pat === 'thirds' ? ((((r2 % 3) + 3) % 3) * u / 3) : 0);
+          m2 += R(xx, r2 * uh, u, uh, g);
+        }
+      }
+      return m2;
+    }
     return gridFill(0, 0, W, H, u, pat, g);
   }
   function fillSVG() {
@@ -3422,7 +3529,24 @@ window.TBstate = {
     });
   }
 
-  makeChipRow(document.getElementById('pv-patterns'), PATS, function () { return state.pattern; }, function (v) { state.pattern = v; fillSVG(); });
+  // the Preview used to hold a third opinion about the pattern; it now shows what
+  // you actually chose, and starts from the real tile's proportions
+  var pvPat = document.getElementById('pv-patterns');
+  function followLayout() {
+    var T = window.TB || {}, id = T.pattern || 'straight';
+    state.pattern = ({ vertical: 'straight', sheet: 'straight', pinwheel: 'straight' })[id] || id;
+    var tw = T.tw || 12, th = T.th || 12;
+    state.aspect = th > 0 ? tw / th : 1;
+    if (pvPat) {
+      var known = PATS.filter(function (p) { return p[0] === state.pattern; })[0];
+      pvPat.innerHTML = '<span style="font-size:.84rem;color:var(--ink-soft)">Showing <b style="color:var(--ink)">' +
+        (known ? known[1] : state.pattern) + '</b> at ' + window.TBU.fmt(tw) + ' × ' + window.TBU.fmt(th) +
+        ' — set on the Layout tab.</span>';
+    }
+    fillSVG();
+  }
+  window.addEventListener('tb-change', followLayout);
+  followLayout();
   makeSwatches(document.getElementById('pv-colors'), TILE_COLORS, function () { return state.tile; }, function (v) { state.tile = v; fillSVG(); });
   makeSwatches(document.getElementById('pv-grouts'), GROUT_COLORS, function () { return state.grout; }, function (v) { state.grout = v; fillSVG(); });
 
