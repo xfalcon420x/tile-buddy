@@ -685,7 +685,7 @@
         <p class="field-hint">Type the <b>real measured size</b> — a &ldquo;12&Prime;&rdquo; tile is often 11 7/8 or 11 3/4. Fractions work: <span class="mono">11 7/8</span>. For planks (12&times;24, 6&times;24) set both, and <b>&#8635;</b> turns it 90&deg;.</p>
       </div>
       <div class="field">
-        <p class="label">Grout joint</p>
+        <p class="label" id="grout-label">Grout joint</p>
         <div class="chips" id="grout-chips"></div>
         <div class="dgm" data-dgm="grout"></div>
       </div>
@@ -897,7 +897,7 @@
         <div class="pv-ctl"><span class="pv-lbl">Pattern</span><div class="chips" id="pv-patterns"></div></div>
         <div class="pv-ctl"><span class="pv-lbl">Tile colour</span><div class="pv-swatches" id="pv-colors"></div></div>
         <div class="pv-ctl"><span class="pv-lbl">Grout</span><div class="pv-swatches" id="pv-grouts"></div></div>
-        <div class="pv-ctl"><span class="pv-lbl">Tile size <span id="pv-scale-val" class="mono"></span></span><input type="range" id="pv-scale" min="4" max="48" step="1" value="12"></div>
+        <div class="pv-ctl"><span class="pv-lbl">Nudge the scale <span id="pv-scale-val" class="mono"></span></span><input type="range" id="pv-scale" min="50" max="200" step="5" value="100"></div>
         <div class="pv-ctl"><span class="pv-lbl">Blend <span id="pv-op-val" class="mono"></span></span><input type="range" id="pv-opacity" min="35" max="100" step="1" value="92"></div>
       </div>
     </div>
@@ -966,15 +966,16 @@
   <!-- ============ BUY LIST ============ -->
   <section id="panel-buy" class="panel" role="tabpanel" hidden>
     <div class="card">
-      <p class="label">Surfaces <span class="hint">width × height</span></p>
+      <p class="label">Surfaces <span class="hint">from the Layout tab</span></p>
+      <div id="job-surfaces" class="trim-report"></div>
+      <p class="label" style="margin:16px 0 8px">Openings &amp; extras <span class="hint">doors, windows, anything else</span></p>
       <div class="surf-head">
         <span>Surface</span><span style="text-align:center">W</span><span></span><span style="text-align:center">H</span><span style="text-align:right" class="area-label">sq ft</span><span></span>
       </div>
       <div id="surfaces"></div>
       <div class="addrow">
-        <button class="btn-ghost" id="add-surf" type="button">+ Add surface</button>
-        <button class="btn-ghost" id="add-sub" type="button">− Subtract opening</button>
-        <button class="btn-ghost" id="pull-job" type="button">↧ Pull the job from Layout</button>
+        <button class="btn-ghost" id="add-surf" type="button">+ Add an area</button>
+        <button class="btn-ghost" id="add-sub" type="button">− Subtract an opening</button>
       </div>
       <div class="total-line">
         <span class="k">Net area to cover</span>
@@ -1448,6 +1449,8 @@ window.TBstate = {
       : state.shape === 'sheet'
         ? 'Sheet size <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-faint)">(the mesh sheet, not one piece)</span>'
         : 'Tile size <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-faint)">(across × up, as it sits)</span>';
+    var gl = document.getElementById('grout-label');
+    if (gl) gl.textContent = state.shape === 'sheet' ? 'Joint between sheets' : 'Grout joint';
     if (hint) hint.innerHTML = hexish
       ? 'Hexagons lay in offset rows — there is no pattern to pick, and every edge piece is an angled cut.'
       : state.shape === 'sheet'
@@ -2122,12 +2125,12 @@ window.TBstate = {
   ];
   var SURFACE_TYPES = ['Back wall', 'Left wall', 'Right wall', 'Ceiling', 'Floor / pan', 'Curb', 'Other'];
 
+  /* The job is described once, on the Layout tab. This used to keep a second copy
+     that quietly drifted — a shower there came out as three walls and no floor here.
+     Now the job is read from it, and this list holds only what the layout cannot
+     know about: door and window openings, and any extra area. */
   var state = {
-    surfaces: [
-      { type: 'Back wall', w: 60, h: 84, sub: false },
-      { type: 'Left wall', w: 36, h: 84, sub: false },
-      { type: 'Right wall', w: 36, h: 84, sub: false }
-    ],
+    surfaces: [],
     pattern: 'straight', waste: 10,
     boxCov: 15, trowelBase: 75, backbutter: false, thinCov: 75, groutCov: 70, backerSheet: 15,
     wp: 'liquid', grtType: 'cement', uncoupling: false,
@@ -2140,8 +2143,23 @@ window.TBstate = {
   }
   function sqft(s) { return (s.w * s.h) / 144; }
 
+  function jobSurfaces() {
+    return ((window.TB || {}).surfaces || []).filter(function (s) { return s.w > 0 && s.h > 0; });
+  }
+  function renderJobSurfaces() {
+    var el = document.getElementById('job-surfaces');
+    if (!el) return;
+    var js = jobSurfaces(), U = window.TBU;
+    if (!js.length) { el.innerHTML = '<span class="muted">Nothing laid out yet — start on the Layout tab.</span>'; return; }
+    var tot = js.reduce(function (a, s) { return a + s.w * s.h / 144; }, 0);
+    el.innerHTML = js.map(function (s) {
+      return '<b>' + s.type + '</b> ' + U.numStr(s.w) + ' × ' + U.numStr(s.h);
+    }).join(' · ') + ' — <b>' + (U.metric() ? (tot * 0.092903).toFixed(2) + ' m²' : tot.toFixed(1) + ' sq ft') + '</b>';
+  }
   function renderSurfaces() {
+    renderJobSurfaces();
     var host = document.getElementById('surfaces'); host.innerHTML = '';
+    if (!state.surfaces.length) { host.innerHTML = '<p class="niche-empty">No openings or extras.</p>'; return; }
     state.surfaces.forEach(function (s, i) {
       var row = document.createElement('div');
       row.className = 'surf-row' + (s.sub ? ' subtract' : '');
@@ -2182,15 +2200,14 @@ window.TBstate = {
       (touched && state.waste !== w ? ' (you have set ' + state.waste + '%)' : '') +
       '. <span class="muted">Change it on the Layout tab.</span>';
   }
-  window.addEventListener('tb-change', function () { renderPatterns(); compute(); });
+  window.addEventListener('tb-change', function () { renderPatterns(); renderJobSurfaces(); compute(); });
   /* Waterproofing quantities come OUT of the job rather than being asked for again:
      wall and floor areas, the corners where planes meet, and one seal per penetration. */
   function split() {
     var wall = 0, floor = 0, floorPerim = 0, walls = 0, maxH = 0;
-    state.surfaces.forEach(function (s) {
-      if (s.sub) return;
+    jobSurfaces().forEach(function (s) {
       var a = (s.w * s.h) / 144;
-      if (/floor|pan/i.test(s.type)) { floor += a; floorPerim += 2 * (s.w + s.h) / 12; }
+      if (/floor|pan|threshold|hearth/i.test(s.type)) { floor += a; floorPerim += 2 * (s.w + s.h) / 12; }
       else { wall += a; walls++; if (s.h > maxH) maxH = s.h; }
     });
     return { wall: wall, floor: floor, floorPerim: floorPerim, walls: walls, maxH: maxH };
@@ -2265,7 +2282,12 @@ window.TBstate = {
         (state.grtType === 'epoxy' ? ' Epoxy grout needs no sealer.' : '');
   }
 
-  function netArea() { var a = 0; state.surfaces.forEach(function (s) { a += (s.sub ? -1 : 1) * sqft(s); }); return Math.max(0, a); }
+  function netArea() {
+    var a = 0;
+    jobSurfaces().forEach(function (s) { a += (s.w * s.h) / 144; });
+    state.surfaces.forEach(function (s) { a += (s.sub ? -1 : 1) * sqft(s); });
+    return Math.max(0, a);
+  }
 
   function compute() {
     var net = netArea(), withWaste = net * (1 + state.waste / 100);
@@ -2330,19 +2352,6 @@ window.TBstate = {
       window.dispatchEvent(new Event('tb-change'));
     });
   })();
-  // the job is described once on the Layout tab; don't make anyone type it twice
-  document.getElementById('pull-job').addEventListener('click', function () {
-    var T = window.TB || {};
-    if (!T.surfaces || !T.surfaces.length) return;
-    state.surfaces = T.surfaces.filter(function (s) { return s.w > 0 && s.h > 0; }).map(function (s) {
-      var t = /floor|pan/i.test(s.type) ? 'Floor / pan'
-            : /curb/i.test(s.type) ? 'Curb'
-            : /ceiling/i.test(s.type) ? 'Ceiling'
-            : SURFACE_TYPES.indexOf(s.type) >= 0 ? s.type : 'Other';
-      return { type: t, w: s.w, h: s.h, sub: false };
-    });
-    renderSurfaces(); compute();
-  });
   document.getElementById('add-surf').addEventListener('click', function () { state.surfaces.push({ type: 'Other', w: 0, h: 0, sub: false }); renderSurfaces(); compute(); });
   document.getElementById('add-sub').addEventListener('click', function () { state.surfaces.push({ type: 'Other', w: 0, h: 0, sub: true }); renderSurfaces(); compute(); });
   document.getElementById('waste').addEventListener('input', function (e) { state.waste = parseFloat(e.target.value) || 0; compute(); });
@@ -2488,25 +2497,35 @@ window.TBstate = {
     { id: 'brick', name: 'Running bond', waste: 10, desc: 'Each row shifts half a tile — the standard brick offset. Hides a little lippage.', draw: function () { return gridP(3, 'brick'); } },
     { id: 'thirds', name: 'Third bond', waste: 12, desc: 'Each row shifts a third. The go-to for long plank tile.', draw: function () { return gridP(3, 'thirds'); } },
     { id: 'vertical', name: 'Vertical', waste: 10, desc: 'Stacked in columns — draws the eye up, makes a wall feel taller.', draw: function () { return gridP(3, 'vertical'); } },
-    { id: 'herring', name: 'Herringbone', waste: 18, desc: 'Planks interlock at 90° in a zigzag. All angled cuts — the priciest to set.', draw: herringP, needs: 'plank' },
+    { id: 'herring', name: 'Herringbone', waste: 18, desc: 'Planks interlock at 90° in a zigzag. All angled cuts — the priciest to set.', draw: herringP, needs: 'twotoone' },
     { id: 'diagonal', name: 'Diagonal', waste: 15, desc: 'The grid turned on point, 45°. More cuts at every wall.', draw: diagonalP },
-    { id: 'basket', name: 'Basketweave', waste: 12, desc: 'Pairs woven over-and-under — a classic bath-floor look.', draw: basketP, needs: 'plank' },
+    { id: 'basket', name: 'Basketweave', waste: 12, desc: 'Pairs woven over-and-under — a classic bath-floor look.', draw: basketP, needs: 'twotoone' },
     { id: 'pinwheel', name: 'Pinwheel', waste: 15, desc: 'A small tile spun inside four larger ones. Also called hopscotch.', draw: pinwheelP, needs: 'two' }
   ];
   /* You cannot lay a square tile in herringbone or basketweave — those need a plank.
      Pinwheel needs two different sizes. Rather than let someone pick a layout their
      tile can't make, the ones that don't apply drop out and say why. */
   function plank(tw, th) { return Math.abs(tw - th) > Math.max(0.05, Math.min(tw, th) * 0.02); }
+  // the interlock and the weave are both built on a plank that is exactly twice as
+  // long as it is wide; anything else would have to invent a tile you did not buy
+  function twoToOne(tw, th) {
+    var lo = Math.min(tw, th), hi = Math.max(tw, th);
+    return Math.abs(hi - 2 * lo) <= Math.max(0.05, hi * 0.02);
+  }
   function applies(p, tw, th, shape) {
     if (shape !== 'rect') return false;
+    if (p.needs === 'twotoone') return twoToOne(tw, th);
     if (p.needs === 'plank') return plank(tw, th);
     if (p.needs === 'two') return false;               // we model one tile size
     if (p.id === 'vertical') return plank(tw, th);     // on a square it IS straight
     return true;
   }
   function whyNot(p, tw, th) {
+    var U = window.TBU;
     if (p.needs === 'two') return p.name + ' needs two tile sizes';
     if (p.id === 'vertical') return 'Vertical is the same as straight on a square tile';
+    if (p.needs === 'twotoone') return p.name + ' needs a plank twice as long as it is wide — yours is ' +
+      U.fmt(tw) + ' × ' + U.fmt(th);
     return p.name + ' needs a plank, not a square';
   }
 
@@ -2561,7 +2580,7 @@ window.TBstate = {
     });
     // if the tile changed under the current pick, fall back to something it can do
     if (!shown.some(function (p) { return p.id === current; })) select('straight', true);
-    note.innerHTML = 'The cut math covers the <b>straight &amp; offset</b> family and herringbone. Diagonal, basketweave and pinwheel show a preview only — their cut geometry is still to come.' +
+    note.innerHTML = 'Every pattern here is fully cut-listed — the straight &amp; offset family, herringbone, diagonal and basketweave.' +
       (hidden.length ? '<br><span style="color:var(--amber)">Not with this tile: ' +
         hidden.map(function (p) { return whyNot(p, tw, th); }).join(' · ') + '.</span>' : '');
   }
@@ -2751,7 +2770,7 @@ window.TBstate = {
           if (ar < HEX_MIN) { if (acc) acc.dropped += ar; continue; }
           var pb = polyBBox(clipped);
           out.push({ x: pb.x0, y: pb.y0, w: pb.x1 - pb.x0, h: pb.y1 - pb.y0, poly: clipped,
-            hex: true, area: ar, fullW: ar >= fullA - 0.05, fullH: ar >= fullA - 0.05 });
+            hex: true, area: ar, nomA: fullA, fullW: ar >= fullA - 0.05, fullH: ar >= fullA - 0.05 });
         }
       }
     }
@@ -2869,6 +2888,51 @@ window.TBstate = {
     return { field: field, interior: interior };
   }
 
+  /* Diagonal is the grid turned 45°. Generate the lattice in the rotated frame,
+     rotate each square into place, then clip it like anything else — now that the
+     clipper handles polygons this costs almost nothing. */
+  function diagonal2D(W, H, tw, th, grout, rects, acc) {
+    var s = Math.min(tw, th), mod = s + grout, out = [];
+    var RS = rects && rects.length ? rects : [{ x: 0, y: 0, w: W, h: H }];
+    var c = Math.SQRT1_2, cx = W / 2, cy = H / 2;
+    var N = Math.ceil((W + H) / mod) + 3, fullA = s * s;
+    for (var i = -N; i <= N; i++) for (var j = -N; j <= N; j++) {
+      var u = i * mod, v = j * mod, poly = [];
+      [[-s / 2, -s / 2], [s / 2, -s / 2], [s / 2, s / 2], [-s / 2, s / 2]].forEach(function (o) {
+        var a = u + o[0], b = v + o[1];
+        poly.push({ x: cx + (a - b) * c, y: cy + (a + b) * c });
+      });
+      for (var q = 0; q < RS.length; q++) {
+        var Rq = RS[q], cl = clipToRect(poly, Rq.x, Rq.y, Rq.x + Rq.w, Rq.y + Rq.h);
+        if (cl.length < 3) continue;
+        var ar = polyArea2(cl);
+        if (ar < HEX_MIN) { if (acc) acc.dropped += ar; continue; }
+        var pb = polyBBox(cl);
+        out.push({ x: pb.x0, y: pb.y0, w: pb.x1 - pb.x0, h: pb.y1 - pb.y0, poly: cl, diag: true, area: ar,
+          nomA: fullA, fullW: ar >= fullA - 0.05, fullH: ar >= fullA - 0.05 });
+      }
+    }
+    return out;
+  }
+  /* Basketweave: 2s x 2s blocks, alternating two planks laid flat and two on end.
+     Needs a 2:1 plank; anything else uses long/2 the way herringbone does. */
+  function basket2D(W, H, tw, th, grout, rects) {
+    var lo = Math.min(tw, th), hi = Math.max(tw, th);
+    var s = (Math.abs(hi - 2 * lo) <= Math.max(0.05, hi * 0.02)) ? lo : hi / 2;
+    var B = 2 * s, out = [], RS = rects && rects.length ? rects : [{ x: 0, y: 0, w: W, h: H }];
+    var nx = Math.ceil(W / B) + 2, ny = Math.ceil(H / B) + 2;
+    for (var i = -1; i <= nx; i++) for (var j = -1; j <= ny; j++) {
+      var bx = i * B, by = j * B, flat = (((i + j) % 2) + 2) % 2 === 0;
+      var planks = flat
+        ? [[bx, by, B, s], [bx, by + s, B, s]]
+        : [[bx, by, s, B], [bx + s, by, s, B]];
+      for (var q = 0; q < RS.length; q++) for (var k = 0; k < 2; k++) {
+        pushClip(out, planks[k][0], planks[k][1], planks[k][2], planks[k][3], RS[q]);
+      }
+    }
+    return out;
+  }
+
   // The interlock needs a 2:1 plank. A real 12x24 IS 2:1, so use it as-is;
   // anything else falls back to long/2 x long and the note says so.
   function plankOf(tw, th) {
@@ -2965,6 +3029,7 @@ window.TBstate = {
   function sizeOf(t) {
     if (t.hex && !(t.fullW && t.fullH)) return '⬡ ' + toDim(t.w) + ' × ' + toDim(t.h);
     if (t.hex) return '⬡ ' + toDim(t.w) + ' across';
+    if (t.diag) return '◇ ' + toDim(t.w) + ' × ' + toDim(t.h);
     if (t.scribe) return toDim(t.wBotEdge) + ' → ' + toDim(t.wTopEdge) + ' × ' + toDim(t.h);
     if (t.shaped) return '⌂ ' + toDim(t.w) + ' × ' + toDim(t.h);
     return toDim(t.w) + ' × ' + toDim(t.h);
@@ -2988,6 +3053,7 @@ window.TBstate = {
   function noteOf(t) {
     var parts = [], nt = nicheText(t), ht = holeText(t);
     if (t.hex && !(t.fullW && t.fullH)) parts.push('angled hex piece · ' + Math.round(t.area) + ' sq in');
+    if (t.diag && !(t.fullW && t.fullH)) parts.push('diagonal cut · ' + Math.round(t.area) + ' sq in');
     if (t.scribe) parts.push('scribe — the wall leans, wide at the ' + (t.wBotEdge > t.wTopEdge ? 'bottom' : 'top'));
     if (t.shaped) parts.push('shaped piece · ' + Math.round(t.area) + ' sq in — trace it off the wall');
     if (nt) parts.push(nt);
@@ -3157,7 +3223,12 @@ window.TBstate = {
   function classify(t, tw, th) {
     if (t.shaped) return Math.min(t.w, t.h) <= SLIVER ? 'sliver' : 'cut';
     if (t.scribe) return Math.min(t.wTopEdge, t.wBotEdge) <= SLIVER ? 'sliver' : 'cut';
-    if (t.hex) return (!t.fullW || !t.fullH) && Math.min(t.w, t.h) <= SLIVER ? 'sliver' : (t.fullW && t.fullH ? 'full' : 'cut');
+    if (t.hex || t.diag) {
+      if (t.fullW && t.fullH) return 'full';
+      // a corner shard can be wide and still be a shard, so area decides as well as width
+      var fullA = t.hex ? (t.area / Math.max(1e-9, t.frac || 1)) : 0;
+      return (Math.min(t.w, t.h) <= SLIVER || (t.nomA && t.area <= t.nomA * 0.08)) ? 'sliver' : 'cut';
+    }
     if (t.niched) return t.thin <= SLIVER ? 'sliver' : 'cut';   // an L-piece isn't a "half tile"
     if (t.fullW && t.fullH) return 'full';
     var pairs = [];
@@ -3242,6 +3313,8 @@ window.TBstate = {
       var rectsJ = fieldRects(s.w, s.h, s.trim, s.bands);
       var raw = (pat === 'herring') ? herringbone2D(s.w, s.h, tw, th, rectsJ)
               : (pat === 'hex') ? hexTiles(s.w, s.h, Math.min(tw, th), grout, rectsJ)
+              : (pat === 'diagonal') ? diagonal2D(s.w, s.h, tw, th, grout, rectsJ)
+              : (pat === 'basket') ? basket2D(s.w, s.h, tw, th, grout, rectsJ)
               : (GRID[pat] ? fieldTiles(s.w, s.h, tw, th, grout, mode, pat, s.trim, s.bands, s.wTop) : null);
       if (!raw) return;
       raw = raw.concat(bandTiles(s.w, s.h, grout, s.trim, s.bands));
@@ -3278,6 +3351,23 @@ window.TBstate = {
     var W = T.wall, H = T.height, tw = T.tw || T.tile || 12, th = T.th || T.tile || 12, tile = tw, grout = T.grout, mode = T.mode || 'tile', pat = T.pattern || 'straight', surf = T.surface || 'wall';
     if (wordEl) wordEl.textContent = surf;
     if (!(W > 0) || !(H > 0) || !(tile > 0)) { svg.innerHTML = ''; cutEl.innerHTML = ''; noteEl.textContent = ''; return; }
+    if (pat === 'diagonal' || pat === 'basket') {
+      svg.style.display = 'block';
+      var dRects = fieldRects(W, H, T.trim, T.bands);
+      var dRaw = (pat === 'diagonal') ? diagonal2D(W, H, tw, th, grout, dRects)
+                                      : basket2D(W, H, tw, th, grout, dRects);
+      dRaw = dRaw.concat(bandTiles(W, H, grout, T.trim, T.bands));
+      var dSplit = subtractNiches(dRaw, nicheBoxes(T.niches, H));
+      var dTiles = dSplit.field.concat(dSplit.interior);
+      annotate(dTiles, T.holes, H);
+      var dCuts = buildCuts(dTiles, tw, th);
+      draw(dTiles, W, H, grout, Math.min(tw, th), dCuts, nicheBoxes(T.niches, H), T.trim);
+      cutlist(dCuts, Math.min(tw, th), dTiles.length);
+      noteEl.textContent = pat === 'diagonal'
+        ? toDim(Math.min(tw, th)) + ' tile turned 45°. Every piece against a wall is an angled cut, which is why the waste runs higher.'
+        : 'Basketweave in ' + toDim(Math.min(tw, th)) + ' × ' + toDim(2 * Math.min(tw, th)) + ' planks, woven two and two.';
+      return;
+    }
     if (pat === 'hex') {
       svg.style.display = 'block';
       var across = Math.min(tw, th);
@@ -3352,6 +3442,7 @@ window.TBstate = {
   window.TBEngine = {
     layoutRegion: layoutRegion, fieldTiles: fieldTiles, fieldRects: fieldRects, bandTiles: bandTiles,
     herringbone2D: herringbone2D, hexTiles: hexTiles, plankOf: plankOf,
+    diagonal2D: diagonal2D, basket2D: basket2D,
     applyNiches: applyNiches, applyNichesPoly: applyNichesPoly, nicheBoxes: nicheBoxes, annotate: annotate,
     buildCuts: buildCuts, classify: classify, clipRect: clipRect, polyArea2: polyArea2,
     keyOf: keyOf, sizeOf: sizeOf, isCut: function (t) { return !(t.fullW && t.fullH) || !!t.holes || !!t.niched; },
@@ -3367,6 +3458,10 @@ window.TBstate = {
         var ac = Math.min(tw, th), fA = 1.5 * Math.sqrt(3) * Math.pow(ac / Math.sqrt(3), 2);
         var sp = subtractNiches(hexTiles(W, H, ac, grout, rects, acc).concat(bands), boxes, fA, acc);
         tiles = sp.field.concat(sp.interior);
+      } else if (pat === 'diagonal' || pat === 'basket') {
+        raw = ((pat === 'diagonal') ? diagonal2D(W, H, tw, th, grout, rects, acc) : basket2D(W, H, tw, th, grout, rects)).concat(bands);
+        var sd = subtractNiches(raw, boxes, null, acc);
+        tiles = sd.field.concat(sd.interior);
       } else if (pat === 'herring') {
         raw = herringbone2D(W, H, tw, th, rects).concat(bands);
         var sh = subtractNiches(raw, boxes, null, acc);
@@ -3536,13 +3631,19 @@ window.TBstate = {
     var T = window.TB || {}, id = T.pattern || 'straight';
     state.pattern = ({ vertical: 'straight', sheet: 'straight', pinwheel: 'straight' })[id] || id;
     var tw = T.tw || 12, th = T.th || 12;
-    state.aspect = th > 0 ? tw / th : 1;
+    // the marked quad stands for the surface, so a real tile size maps to a real
+    // number of tiles — the slider is now a nudge around that, not the whole story
+    var sw = T.wall || 60, sh = T.height || 84;
+    state.base = Math.max(2, OW * (tw / Math.max(1, sw)));
+    state.aspect = (tw * sh) / Math.max(1e-6, th * sw);
+    state.scale = state.base * (state.adj === undefined ? 1 : state.adj);
     if (pvPat) {
       var known = PATS.filter(function (p) { return p[0] === state.pattern; })[0];
       pvPat.innerHTML = '<span style="font-size:.84rem;color:var(--ink-soft)">Showing <b style="color:var(--ink)">' +
         (known ? known[1] : state.pattern) + '</b> at ' + window.TBU.fmt(tw) + ' × ' + window.TBU.fmt(th) +
         ' — set on the Layout tab.</span>';
     }
+    if (typeof showScale === 'function') showScale();
     fillSVG();
   }
   window.addEventListener('tb-change', followLayout);
@@ -3551,8 +3652,20 @@ window.TBstate = {
   makeSwatches(document.getElementById('pv-grouts'), GROUT_COLORS, function () { return state.grout; }, function (v) { state.grout = v; fillSVG(); });
 
   var scaleEl = document.getElementById('pv-scale'), scaleVal = document.getElementById('pv-scale-val');
-  scaleEl.addEventListener('input', function () { state.scale = +scaleEl.value; scaleVal.textContent = scaleEl.value + 'px'; fillSVG(); });
-  scaleVal.textContent = scaleEl.value + 'px';
+  scaleEl.min = 50; scaleEl.max = 200; scaleEl.step = 5; scaleEl.value = 100;
+  function showScale() {
+    // followLayout() runs before this control is wired, so don't assume it exists yet
+    var el = document.getElementById('pv-scale-val');
+    if (!el) return;
+    var T = window.TB || {};
+    el.textContent = window.TBU.fmt((T.tw || 12) * (state.adj || 1)) + ' tile';
+  }
+  scaleEl.addEventListener('input', function () {
+    state.adj = (+scaleEl.value) / 100;
+    state.scale = (state.base || 12) * state.adj;
+    showScale(); fillSVG();
+  });
+  showScale();
   var opEl = document.getElementById('pv-opacity'), opVal = document.getElementById('pv-op-val');
   opEl.addEventListener('input', function () { state.opacity = +opEl.value; opVal.textContent = opEl.value + '%'; overlay.style.opacity = state.opacity / 100; });
   opVal.textContent = opEl.value + '%';
