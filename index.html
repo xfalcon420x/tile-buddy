@@ -701,7 +701,7 @@
       <div class="field">
         <p class="label" id="lbl-width">Width</p>
         <div class="row">
-          <input type="number" id="wall" value="60" min="0" step="0.125" inputmode="decimal" aria-label="Width">
+          <input type="number" id="wall" min="0" step="0.125" inputmode="decimal" aria-label="Width" placeholder="measure">
           <span class="unit unit-label">in</span>
         </div>
         <div class="chips" id="wall-chips"></div>
@@ -709,7 +709,7 @@
       <div class="field">
         <p class="label" id="lbl-height">Height</p>
         <div class="row">
-          <input type="number" id="height" value="84" min="0" step="0.125" inputmode="decimal" aria-label="Height">
+          <input type="number" id="height" min="0" step="0.125" inputmode="decimal" aria-label="Height" placeholder="measure">
           <span class="unit unit-label">in</span>
         </div>
         <div class="chips" id="height-chips"></div>
@@ -730,6 +730,7 @@
     <div class="card">
       <p class="label">Holes &amp; penetrations <span class="hint">valve, head, spout, drain</span></p>
       <div class="chips" id="hole-add"></div>
+      <div id="drain-list"></div>
       <div class="dgm" data-dgm="hole"></div>
       <div id="hole-list"></div>
       <p class="field-hint" id="hole-hint">The cut list tells you where each hole lands <b>on its own tile</b> — that is the number you mark. The sizes are starting points: cut to what the valve needs and the escutcheon covers.</p>
@@ -1220,15 +1221,19 @@ window.TBstate = {
 /* ============ LAYOUT engine ============ */
 (function () {
   var SLIVER = 2.0;
+  /* A job preset creates the SURFACES — never the sizes. "Backsplash 96×18" on screen
+     before anyone measured anything reads as an answer, and it's a guess (Falcon,
+     2026-08-13). Zero means "not measured yet": inputs show blank, the list says
+     "measure it", and everything downstream already guards on w>0/h>0. */
   var JOBS = {
-    shower: ['Back wall', 60, 84, 'Left wall', 36, 84, 'Right wall', 36, 84, 'Floor / pan', 36, 60],
-    floor: ['Floor', 120, 144],
-    wall:       ['Wall', 96, 96],
-    backsplash: ['Backsplash', 96, 18],
-    fireplace: ['Fireplace', 60, 48],
-    custom: ['Surface 1', 48, 48]
+    shower: ['Back wall', 0, 0, 'Left wall', 0, 0, 'Right wall', 0, 0, 'Floor / pan', 0, 0],
+    floor: ['Floor', 0, 0],
+    wall:       ['Wall', 0, 0],
+    backsplash: ['Backsplash', 0, 0],
+    fireplace: ['Fireplace', 0, 0],
+    custom: ['Surface 1', 0, 0]
   };
-  function newSurface(t, w, h) { return { t: t, w: w, h: h, wTop: null, holes: [], niches: [], bands: [], boxes: [], trim: { type: 'none', w: 0.375, l: false, r: false, t: false, b: false } }; }
+  function newSurface(t, w, h) { return { t: t, w: w, h: h, wTop: null, holes: [], niches: [], bands: [], boxes: [], drains: [], trim: { type: 'none', w: 0.375, l: false, r: false, t: false, b: false } }; }
   function jobSurfaces(key) { var a = JOBS[key], out = []; for (var i = 0; i < a.length; i += 3) out.push(newSurface(a[i], a[i + 1], a[i + 2])); return out; }
   // bullnose is a tile band; the profiles are thin. Widths are defaults, all editable.
   var TRIM_TYPES = [['none', 'None', 0], ['bullnose', 'Bullnose', 3], ['schluter', 'Schluter / metal', 0.375], ['pencil', 'Pencil', 0.5], ['pvc', 'PVC', 0.5]];
@@ -1248,7 +1253,12 @@ window.TBstate = {
   /* On a floor the references change: you measure off the BACK wall, and the big one is
      the closet flange. Rough-in puts its centre 12" out from the finished wall. */
   var FLOOR_HOLE_KINDS = [['Toilet flange', 7, 12], ['Toilet supply', 1, 8], ['Drain', 4.5, null], ['Pipe riser', 1, 6], ['Other', 1.25, 12]];
-  function holeKinds() { return isFloor() ? FLOOR_HOLE_KINDS : HOLE_KINDS; }
+  // a shower pan drains — it doesn't get a toilet. Round drains are holes; square and
+  // linear drains are RECTANGULAR cutouts and ride the void machinery (a.drains).
+  var PAN_HOLE_KINDS = [['Center drain', 4.5, null], ['Pipe riser', 1, 6], ['Other', 1.25, 12]];
+  var DRAIN_KINDS = [['Square drain', 6, 6], ['Linear drain', 36, 4]];
+  function isPan() { return /pan|shower base/i.test(A().t || ''); }
+  function holeKinds() { return isPan() ? PAN_HOLE_KINDS : isFloor() ? FLOOR_HOLE_KINDS : HOLE_KINDS; }
   // stored y is always off the near edge; a floor shows it off the back wall instead
   function yIn(a, shown) { return isFloor() ? Math.max(0, a.h - shown) : shown; }
   function yOut(a, stored) { return isFloor() ? Math.max(0, a.h - stored) : stored; }
@@ -1424,7 +1434,9 @@ window.TBstate = {
       surface: (/floor|pan/i.test(A().t) ? 'floor' : 'wall'),
       pattern: (window.TB && window.TB.pattern) || 'straight',
       holes: (A().holes || []).slice(),
-      niches: (A().niches || []).slice(),
+      niches: (A().niches || []).slice().concat((A().drains || []).map(function (d) {
+        return { t: d.t, x: d.x, y: d.y, w: d.w, h: d.h, d: 0, voidOnly: true };
+      })),
       bands: (A().bands || []).slice(),
       boxes: (A().boxes || []).slice(),
       wTop: A().wTop || null,
@@ -1432,7 +1444,7 @@ window.TBstate = {
       // each surface carries its own vertical start — a pan and the wall above it want
       // opposite answers, so the job total can't reuse whichever one is on screen
       surfaces: state.surfaces.map(function (s, i) {
-        return { w: s.w, h: s.h, wTop: s.wTop || null, type: s.t, holes: (s.holes || []).slice(), niches: (s.niches || []).slice(), bands: (s.bands || []).slice(), boxes: (s.boxes || []).slice(), trim: s.trim || null,
+        return { w: s.w, h: s.h, wTop: s.wTop || null, type: s.t, holes: (s.holes || []).slice(), niches: (s.niches || []).slice().concat((s.drains || []).map(function (d) { return { t: d.t, x: d.x, y: d.y, w: d.w, h: d.h, d: 0, voidOnly: true }; })), bands: (s.bands || []).slice(), boxes: (s.boxes || []).slice(), drains: (s.drains || []).slice(), trim: s.trim || null,
                  vmode: (i === state.active) ? currentVMode()
                       : (/floor|pan|hearth/i.test(s.t || '') ? 'vbal' : (isWetJob() ? 'cutbot' : 'fullbot')) };
       }),
@@ -1554,8 +1566,8 @@ window.TBstate = {
   }
   function showSize() {
     var U = window.TBU, a = A();
-    document.getElementById('wall').value = U.num(a.w);
-    document.getElementById('height').value = U.num(a.h);
+    document.getElementById('wall').value = a.w > 0 ? U.num(a.w) : '';
+    document.getElementById('height').value = a.h > 0 ? U.num(a.h) : '';
     var wt = document.getElementById('wtop');
     wt.value = a.wTop ? U.num(a.wTop) : '';
     squareReport();
@@ -1618,7 +1630,7 @@ window.TBstate = {
     var showerish = state.job === 'shower' || state.job === 'custom';
     var nc = document.getElementById('niche-add'); if (nc) nc.closest('.card').hidden = !(wallLike && showerish);
     var bc = document.getElementById('band-add'); if (bc) bc.closest('.card').hidden = !wallLike;
-    renderHoleAdd(); renderHoles(); renderNiches(); renderTrim(); renderBands(); renderBoxes(); renderHeat();
+    renderHoleAdd(); renderHoles(); renderDrains(); renderNiches(); renderTrim(); renderBands(); renderBoxes(); renderHeat();
   }
   function renderJobs() {
     var host = document.getElementById('job-type'); host.innerHTML = '';
@@ -1637,7 +1649,8 @@ window.TBstate = {
     state.surfaces.forEach(function (s, i) {
       var el = document.createElement('button'); el.type = 'button'; el.className = 'surf-item' + (i === state.active ? ' active' : ''); el.dataset.i = i;
       var del = state.surfaces.length > 1 ? '<span class="si-del" data-del="' + i + '">×</span>' : '';
-      el.innerHTML = '<span class="si-dot"></span><span class="si-name">' + s.t + '</span><span class="si-dim mono">' + window.TBU.numStr(s.w) + ' × ' + window.TBU.numStr(s.h) + '</span>' + del;
+      var dim = (s.w > 0 && s.h > 0) ? window.TBU.numStr(s.w) + ' × ' + window.TBU.numStr(s.h) : 'measure it';
+      el.innerHTML = '<span class="si-dot"></span><span class="si-name">' + s.t + '</span><span class="si-dim mono">' + dim + '</span>' + del;
       el.addEventListener('click', function (ev) {
         if (ev.target && ev.target.dataset && ev.target.dataset.del !== undefined) {
           ev.stopPropagation();
@@ -1677,6 +1690,16 @@ window.TBstate = {
   }
   function renderHoleAdd() {
     var host = document.getElementById('hole-add'); host.innerHTML = '';
+    if (isFloor()) DRAIN_KINDS.forEach(function (k) {
+      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = '+ ' + k[0];
+      b.addEventListener('click', function () {
+        var a = A(); if (!a.drains) a.drains = [];
+        // a linear drain sets against a wall or across the entry; start it centred low
+        a.drains.push({ t: k[0], x: Math.max(0, Math.round((a.w - k[1]) / 2 * 4) / 4), y: k[0] === 'Linear drain' ? 0.5 : Math.max(0, Math.round((a.h - k[2]) / 2 * 4) / 4), w: k[1], h: k[2] });
+        renderDrains(); render();
+      });
+      host.appendChild(b);
+    });
     holeKinds().forEach(function (k) {
       var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = '+ ' + k[0];
       b.addEventListener('click', function () {
@@ -1692,6 +1715,31 @@ window.TBstate = {
     if (hint) hint.innerHTML = isFloor()
       ? 'The cut list tells you where each hole lands <b>on its own tile</b> — that is the number you mark. A closet flange sits <b>on top of the finished tile</b>, not under it: cut the tile around the pipe and let the flange land over it. Set it low and the toilet rocks and leaks.'
       : 'The cut list tells you where each hole lands <b>on its own tile</b> — that is the number you mark. The sizes are starting points: cut to what the valve needs and the escutcheon covers.';
+  }
+
+  /* ---- rectangular drains (square + linear) — voids in the pan ---- */
+  function renderDrains() {
+    var host = document.getElementById('drain-list'), a = A(), U = window.TBU;
+    if (!host) return;
+    if (!a.drains) a.drains = [];
+    host.innerHTML = '';
+    a.drains.forEach(function (d, i) {
+      var box = document.createElement('div'); box.className = 'band-item';
+      box.innerHTML =
+        '<div class="niche-top"><span class="hname">' + d.t + '</span><button class="del" type="button" aria-label="Remove drain">×</button></div>' +
+        '<div class="niche-grid">' +
+        '<label>From left<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(d.x) + '"></label>' +
+        '<label>Up<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(d.y) + '"></label>' +
+        '<label>Wide<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(d.w) + '"></label>' +
+        '<label>Deep<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(d.h) + '"></label>' +
+        '</div><div class="band-note">The tile is cut to the drain\'s flange and the grate sits flush — the cut list marks which tiles it lands on. The pan\'s pitch runs TO this spot.</div>';
+      var ins = box.querySelectorAll('.niche-grid input');
+      ['x', 'y', 'w', 'h'].forEach(function (k, j) {
+        ins[j].addEventListener('input', function () { d[k] = window.TBU.toIn(parseFloat(ins[j].value) || 0); render(); });
+      });
+      box.querySelector('.del').addEventListener('click', function () { a.drains.splice(i, 1); renderDrains(); render(); });
+      host.appendChild(box);
+    });
   }
 
   /* ---- niches: a recess is a void in the field AND its own little wall ----
@@ -2129,7 +2177,7 @@ window.TBstate = {
      backsplash has no pan or curb. Offering all of them on every job is how a
      simple layout starts looking complicated. */
   var ADDS = {
-    shower:     ['wall', 'floor', 'curb'],
+    shower:     ['wall', 'floor', 'curb', 'threshold'],
     floor:      ['floor', 'curb', 'threshold'],
     wall:       ['wall'],
     backsplash: ['wall'],
@@ -2137,10 +2185,10 @@ window.TBstate = {
     custom:     ['wall', 'floor', 'curb', 'threshold', 'hearth']
   };
   var ADD_DEF = {
-    wall:      ['+ Wall', 'Wall', 48, 84],
-    floor:     ['+ Floor', 'Floor', 60, 60],
-    hearth:    ['+ Hearth', 'Hearth', 60, 20],
-    threshold: ['+ Threshold', 'Threshold', 36, 5]
+    wall:      ['+ Wall', 'Wall', 0, 0],
+    floor:     ['+ Floor', 'Floor', 0, 0],
+    hearth:    ['+ Hearth', 'Hearth', 0, 0],
+    threshold: ['+ Threshold', 'Threshold', 0, 0]
   };
   function renderAdds() {
     var host = document.getElementById('surf-adds');
@@ -2166,7 +2214,9 @@ window.TBstate = {
   }
   // a curb is three faces sharing one length — top, outside, inside
   function addCurb() {
-    var L = 60, hi = 6, dp = 4.5;
+    // 6 high × 4.5 deep IS standard (2×4s + backer + tile); the length is whatever
+    // the opening is — so the length starts unmeasured like everything else
+    var L = 0, hi = 6, dp = 4.5;
     state.surfaces.push(newSurface('Curb top', L, dp));
     state.surfaces.push(newSurface('Curb outside', L, hi));
     state.surfaces.push(newSurface('Curb inside', L, hi));
@@ -2382,7 +2432,20 @@ window.TBstate = {
 
   function jobSurfaces() {
     var out = ((window.TB || {}).surfaces || []).filter(function (s) { return s.w > 0 && s.h > 0; })
-      .map(function (s) { return { type: s.type, w: s.w, h: s.h, area: s.w * s.h / 144 }; });
+      .map(function (s) {
+        // a chair rail, pencil or metal band isn't tile, and a mosaic strip is ordered
+        // as sheets on its own line — their strips come OUT of the tile square footage,
+        // or the job buys the same run twice
+        var strips = 0;
+        (s.bands || []).forEach(function (b) {
+          if (b.h > 0 && /chair|pencil|schluter|mosaic/.test(b.kind || '')) strips += s.w * b.h;
+        });
+        // a threshold is a marble/stone saddle bought as ONE piece — it gets its own
+        // Buy List line, so its footprint stays out of the tile square footage
+        var saddle = /threshold|saddle/i.test(s.type || '');
+        return { type: s.type, w: s.w, h: s.h, saddle: saddle,
+                 area: saddle ? 0 : Math.max(0, s.w * s.h - strips) / 144 };
+      });
     var R = window.TBROOM;
     if (R && R.on && R.areaSqFt > 0)
       out.push({ type: 'Mapped room', w: 0, h: 0, area: R.areaSqFt, perim: R.perimeter, mapped: true });
@@ -2485,7 +2548,14 @@ window.TBstate = {
       var H = holeCount();
       if (H.small) out.push({ name: 'Pipe seals', sub: 'one per pipe penetration marked on the layout', qty: H.small, unit: H.small === 1 ? 'seal' : 'seals' });
       if (H.big) out.push({ name: 'Mixing valve seals', sub: 'one per valve opening marked on the layout', qty: H.big, unit: H.big === 1 ? 'seal' : 'seals' });
-      if (S.floor > 0) out.push({ name: 'Bonded drain', sub: 'flange that ties into the membrane', qty: 1, unit: 'drain' });
+      if (S.floor > 0) {
+        var drains = [];
+        (((window.TB || {}).surfaces) || []).forEach(function (sf) { (sf.drains || []).forEach(function (d) { drains.push(d); }); });
+        if (!drains.length) out.push({ name: 'Bonded drain', sub: 'flange that ties into the membrane', qty: 1, unit: 'drain' });
+        else drains.forEach(function (d) {
+          out.push({ name: d.t + (/linear/i.test(d.t) ? ' kit' : ''), sub: window.TBU.numStr(d.w) + ' × ' + window.TBU.numStr(d.h) + '″ · flange ties into the membrane', qty: 1, unit: 'drain' });
+        });
+      }
     }
     if (state.uncoupling && S.floor > 0) {
       var ur = Math.ceil(S.floor / Math.max(1, state.unCov));
@@ -2567,6 +2637,11 @@ window.TBstate = {
       var n = Math.ceil(r.inches / pitch);
       out.push({ name: r.name, sub: r.sub + ' · ' + (r.inches / 12).toFixed(1) + ' ft total run',
                  qty: n, unit: n === 1 ? r.buy : r.buy + 's' });
+    });
+    // marble saddles — one per doorway, sized to what was measured
+    (T.surfaces || []).forEach(function (s) {
+      if (/threshold|saddle/i.test(s.type || '') && s.w > 0)
+        out.push({ name: 'Threshold / saddle', sub: window.TBU.numStr(s.w) + '″ doorway · stone saddle, set in thinset, pitched away from the wet side', qty: 1, unit: 'saddle' });
     });
     return out;
   }
@@ -3042,6 +3117,7 @@ window.TBstate = {
         if (Math.abs(eT - eB) > 1e-6) {
           var wT = Math.max(0, eT - cl), wB = Math.max(0, eB - cl);
           out.push({ x: cl, y: y0, w: Math.max(wT, wB), h: y1 - y0, band: true, role: b.t || 'accent band',
+            mat: b.kind || 'stripe',
             scribe: true, wTopEdge: wT, wBotEdge: wB, area: (wT + wB) / 2 * (y1 - y0),
             poly: [{ x: cl, y: y0 }, { x: cl + wT, y: y0 }, { x: cl + wB, y: y1 }, { x: cl, y: y1 }],
             fullW: false, fullH: true });
@@ -3049,6 +3125,7 @@ window.TBstate = {
         }
         var cr = Math.min(eT, eB);
         if (cr - cl > 0.02) out.push({ x: cl, y: y0, w: cr - cl, h: y1 - y0, band: true,
+          mat: b.kind || 'stripe',
           fullW: (cr - cl) >= tw - 0.02, fullH: true, role: b.t || 'accent band' });
       }
     });
@@ -3178,6 +3255,7 @@ window.TBstate = {
     tiles.forEach(function (t) { (t.poly ? polys : rects).push(t); });
     var field = applyNiches(rects, boxes), interior = [];
     boxes.forEach(function (b) {
+      if (b.voidOnly) return;                       // a drain cutout has no back panel
       rects.forEach(function (t) {
         (t.parts || [t]).forEach(function (q) {
           var c = clipRect({ x: q.x, y: q.y, w: q.w, h: q.h }, b);
@@ -3198,6 +3276,7 @@ window.TBstate = {
       var hits = boxes.filter(function (b) { return t.x < b.x + b.w && t.x + t.w > b.x && t.y < b.y + b.h && t.y + t.h > b.y; });
       if (!hits.length) { field.push(t); return; }
       hits.forEach(function (b) {
+        if (b.voidOnly) return;                     // nothing lives inside a drain
         var c = clipToRect(t.poly, b.x, b.y, b.x + b.w, b.y + b.h);
         if (c.length > 2) { var ca = polyArea2(c); if (ca > HEX_MIN) interior.push(like(t, c, 'niche back')); else if (acc && !interiorCovered) acc.dropped += ca; }
       });
@@ -3363,7 +3442,7 @@ window.TBstate = {
   }
   function nicheBoxes(niches, H) {
     return (niches || []).filter(function (n) { return n.w > 0 && n.h > 0; })
-      .map(function (n) { return { x: n.x, y: H - n.y - n.h, w: n.w, h: n.h, src: n }; });
+      .map(function (n) { return { x: n.x, y: H - n.y - n.h, w: n.w, h: n.h, src: n, voidOnly: !!n.voidOnly }; });
   }
 
   /* ---- box pattern (a framed panel) ----
@@ -3529,9 +3608,11 @@ window.TBstate = {
   }
   function keyOf(t) { var n = noteOf(t); return n ? sizeOf(t) + ' · ' + n : sizeOf(t); }
   // group the cut pieces by exact size and number them 1..N (cut-by-number)
+  var BOUGHT_BANDS = { chair: 1, pencil: 1, schluter: 1 };   // sticks and liners, not saw work
   function buildCuts(tiles, tw, th) {
     var order = [], groups = {};
     tiles.forEach(function (t) {
+      if (t.mat && BOUGHT_BANDS[t.mat]) return;   // ordered by the stick on the Buy List
       if (t.fullW && t.fullH && !t.holes && !t.niched && !t.shaped) return;
       var key = keyOf(t);
       if (!groups[key]) {
@@ -5290,7 +5371,7 @@ window.TBstate = {
         zr += (a + b) / 2 * r.h;
       });
       var zb = bandArea(cfg);
-      var zexp = zr + zb;
+      var zexp = zr + zb - (cfg.voidArea || 0);
       if (Math.abs(zt - zexp) > Math.max(0.01, zexp * 2e-5))
         fails.push({ name: 'conservation', detail: 'at grout 0 the pieces (plus ' + (Z.dropped || 0).toFixed(4) + ' of uncuttable specks) sum to ' + zt.toFixed(4) + ' but the field is ' + zexp.toFixed(4) + ' (off ' + (zt - zexp).toFixed(4) + ')' });
     }
@@ -5299,7 +5380,7 @@ window.TBstate = {
     if (window.TBEngine.GRID[cfg.pat] && !cfg.wTop) {
       var tot = 0; tiles.forEach(function (t) { tot += areaOf(t); });
       var fieldA = 0; R.rects.forEach(function (r) { fieldA += r.w * r.h; });
-      fieldA += bandArea(cfg);
+      fieldA += bandArea(cfg); fieldA -= (cfg.voidArea || 0);
       var frac = (cfg.tw / (cfg.tw + cfg.grout)) * (cfg.th / (cfg.th + cfg.grout));
       var predicted = fieldA * frac;
       if (Math.abs(tot - predicted) > fieldA * 0.06)
@@ -5385,6 +5466,21 @@ window.TBstate = {
       }
       // every pattern follows the lean now, so throw out-of-square walls at all of them
       if (r(27) < 0.3) cfg.wTop = cfg.W + (r(28) - 0.5) * Math.min(6, cfg.W * 0.12);
+      // rectangular drain voids — subtracted with NO back panel. Kept to flat, band-free
+      // walls so the expected-area arithmetic stays hand-checkable.
+      cfg.voidArea = 0;
+      if (r(38) < 0.3 && !cfg.wTop && !cfg.bands.length && cfg.W > 30 && cfg.H > 30) {
+        var vk = r(39) < 0.5 ? [6, 6] : [Math.max(8, Math.floor(cfg.W * 0.4)), 4];
+        var vx = 4 + Math.floor(r(40) * Math.max(1, cfg.W - vk[0] - 8));
+        var vy = 4 + Math.floor(r(41) * Math.max(1, cfg.H - vk[1] - 8));
+        var clash = (cfg.niches || []).some(function (n) {
+          return vx < n.x + n.w && vx + vk[0] > n.x && vy < n.y + n.h && vy + vk[1] > n.y;
+        });
+        if (!clash && vx + vk[0] < cfg.W - 4 && vy + vk[1] < cfg.H - 4) {
+          cfg.niches = (cfg.niches || []).concat([{ t: 'Drain', x: vx, y: vy, w: vk[0], h: vk[1], d: 0, voidOnly: true }]);
+          cfg.voidArea = vk[0] * vk[1];
+        }
+      }
       out.push(cfg);
     }
     return out;
