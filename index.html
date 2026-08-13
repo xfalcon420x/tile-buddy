@@ -421,6 +421,8 @@
   .niche-align.off { color: var(--amber); }
   .niche-snap { font: inherit; font-size: .76rem; font-weight: 650; cursor: pointer; padding: 5px 11px; border-radius: 7px; border: 1.5px solid var(--chalk); background: var(--chalk-wash); color: var(--chalk-deep); white-space: nowrap; }
   .niche-snap:hover { background: var(--chalk); color: #fff; }
+  .niche-edge { display: block; margin-top: 10px; font-size: .78rem; color: var(--ink-soft); }
+  .niche-edge select { width: 100%; margin-top: 4px; }
   .niche-trim { margin-top: 10px; padding-top: 9px; border-top: 1px dashed var(--panel-edge); font-size: .76rem; color: var(--ink-soft); line-height: 1.5; }
   .niche-trim b { color: var(--ink); font-family: ui-monospace, Menlo, monospace; font-weight: 700; }
   .niche-empty { font-size: .8rem; color: var(--ink-faint); font-style: italic; padding: 8px 2px 2px; }
@@ -741,10 +743,11 @@
       <p class="field-hint">The trade rule is to <b>land the opening on grout lines</b>: do that and the inside tiles out in full pieces with no slivers at the edge. Pitch the sill <b>1/8″</b> into the shower so it drains.</p>
     </div>
     <div class="card">
-      <p class="label">Accent bands <span class="hint">a feature row across the wall</span></p>
+      <p class="label">Bands &amp; borders <span class="hint">stripes, rails, pencils, boxes</span></p>
       <div class="chips" id="band-add"></div>
       <div class="dgm" data-dgm="band"></div>
       <div id="band-list"></div>
+      <div id="box-list"></div>
       <p class="field-hint">A band cuts the wall in two: the courses below run up off the floor, and the courses above start a <b>fresh full course off the top of the band</b> — which is how it's actually set.</p>
     </div>
 
@@ -815,8 +818,11 @@
     </div>
 
     <div class="card">
-      <p class="label">Where to start</p>
+      <p class="label">Where to start <small style="font-weight:400;color:var(--ink-soft)">— across</small></p>
       <div class="modes" id="modes"></div>
+      <p class="label" style="margin-top:14px">Where to start <small style="font-weight:400;color:var(--ink-soft)">— up the wall</small></p>
+      <div class="modes" id="vmodes"></div>
+      <p class="assume-note" id="vmode-note"></p>
     </div>
 
     <div class="stats">
@@ -1065,17 +1071,7 @@
           <input type="number" id="thin-cov" value="75" min="5" step="1" inputmode="numeric">
         </div>
         <div class="assume-field">
-          <div class="af-label">Tile size<small>this drives grout coverage</small></div>
-          <select id="tilesize">
-            <option value="15">Mosaic (~2″)</option>
-            <option value="45">Small / subway (3–6″)</option>
-            <option value="70" selected>Standard (12″)</option>
-            <option value="95">Plank / large (12×24)</option>
-            <option value="110">Extra-large (24″+)</option>
-          </select>
-        </div>
-        <div class="assume-field">
-          <div class="af-label">Grout coverage<small>sq ft per 25 lb bag</small></div>
+          <div class="af-label">Grout coverage<small id="grout-cov-why">sq ft per 25 lb bag</small></div>
           <input type="number" id="grout-cov" value="70" min="5" step="1" inputmode="numeric">
         </div>
         <div class="assume-field">
@@ -1227,11 +1223,12 @@ window.TBstate = {
   var JOBS = {
     shower: ['Back wall', 60, 84, 'Left wall', 36, 84, 'Right wall', 36, 84, 'Floor / pan', 36, 60],
     floor: ['Floor', 120, 144],
+    wall:       ['Wall', 96, 96],
     backsplash: ['Backsplash', 96, 18],
     fireplace: ['Fireplace', 60, 48],
     custom: ['Surface 1', 48, 48]
   };
-  function newSurface(t, w, h) { return { t: t, w: w, h: h, wTop: null, holes: [], niches: [], bands: [], trim: { type: 'none', w: 0.375, l: false, r: false, t: false, b: false } }; }
+  function newSurface(t, w, h) { return { t: t, w: w, h: h, wTop: null, holes: [], niches: [], bands: [], boxes: [], trim: { type: 'none', w: 0.375, l: false, r: false, t: false, b: false } }; }
   function jobSurfaces(key) { var a = JOBS[key], out = []; for (var i = 0; i < a.length; i += 3) out.push(newSurface(a[i], a[i + 1], a[i + 2])); return out; }
   // bullnose is a tile band; the profiles are thin. Widths are defaults, all editable.
   var TRIM_TYPES = [['none', 'None', 0], ['bullnose', 'Bullnose', 3], ['schluter', 'Schluter / metal', 0.375], ['pencil', 'Pencil', 0.5], ['pvc', 'PVC', 0.5]];
@@ -1255,10 +1252,21 @@ window.TBstate = {
   // stored y is always off the near edge; a floor shows it off the back wall instead
   function yIn(a, shown) { return isFloor() ? Math.max(0, a.h - shown) : shown; }
   function yOut(a, stored) { return isFloor() ? Math.max(0, a.h - stored) : stored; }
-  var state = { job: 'shower', surfaces: jobSurfaces('shower'), active: 0, tw: 12, th: 12, grout: 0.125, mode: null, shape: 'rect' };
+  var state = { job: 'shower', addKey: 'shower', surfaces: jobSurfaces('shower'), active: 0, tw: 12, th: 12, grout: 0.125, mode: null, vmode: null, shape: 'rect' };
   /* Shape and pattern are different questions, and running them together was wrong:
      hexagon and mosaic sheet are what the tile IS, not how you lay it. */
   var SHAPES = [['rect', 'Square or plank'], ['hex', 'Hexagon'], ['sheet', 'Mosaic sheet']];
+  // a mosaic is a STYLE on a mesh sheet — the sheet is what you cut and what you buy.
+  // Styles don't change the geometry (the sheet does), but the order sheet should say
+  // "penny rounds", not leave the counter guessing.
+  var SHEET_STYLES = [
+    { id: 'penny', n: 'Penny rounds', w: 12, h: 12 },
+    { id: 'hex1', n: '1″ hex', w: 12, h: 12 },
+    { id: 'hex2', n: '2″ hex', w: 12, h: 12 },
+    { id: 'sq1', n: '1″ squares', w: 12, h: 12 },
+    { id: 'sq2', n: '2″ squares', w: 12, h: 12 },
+    { id: 'kit', n: 'Kit-kat / finger', w: 12, h: 12 }
+  ];
   function A() { return state.surfaces[state.active] || { t: 'Surface', w: 0, h: 0 }; }
 
   function toDim(x) { return window.TBU.fmt(x); }
@@ -1291,6 +1299,62 @@ window.TBstate = {
 
   function recommend(results) { return results.tile.score >= results.joint.score ? 'tile' : 'joint'; }
 
+  /* The other axis. A shower wall is not laid from the pan up — the pan slopes, so you snap a
+     level line, run full courses off a ledger, and scribe the bottom course in last. A floor
+     has two visible edges and wants the cut split like the left-right default does. Only a
+     wall landing on something already dead level (a counter) starts full at the bottom. */
+  var VMODES = [
+    { id: 'cutbot', name: 'Cut course at the bottom', desc: 'Ledger line, full courses up, scribe into the pan' },
+    { id: 'vbal', name: 'Split top and bottom', desc: 'Same size cut at both ends' },
+    { id: 'fullbot', name: 'Full course at the bottom', desc: 'Start flush on a level surface, cut at the top' }
+  ];
+  function isFloorSurf() { return /floor|pan|hearth/i.test(A().t || ''); }
+  function isWetJob() { return state.job === 'shower' || (state.surfaces || []).some(function (s) { return /pan|shower|tub/i.test(s.t || ''); }); }
+  function recommendV() { return isFloorSurf() ? 'vbal' : (isWetJob() ? 'cutbot' : 'fullbot'); }
+  function currentVMode() { return state.vmode || recommendV(); }
+
+  // ask the engine — never keep a second copy of layout arithmetic in the UI
+  function vBottomCut(vm) {
+    var a = A(), E = window.TBEngine;
+    if (!E || !E.bottomCut || !(a.w > 0) || !(a.h > 0) || !(state.th > 0)) return null;
+    try {
+      return E.bottomCut({ W: a.w, H: a.h, th: state.th, grout: state.grout,
+                           trim: a.trim || null, bands: a.bands || [], vmode: vm });
+    } catch (e) { return null; }
+  }
+
+  function renderVModes() {
+    var el = document.getElementById('vmodes'), note = document.getElementById('vmode-note');
+    if (!el) return;
+    // this IIFE is defined before the 2D engine, so on the very first paint TBEngine
+    // isn't there yet to answer for the cut sizes — come back once the file has finished
+    if (!window.TBEngine || !window.TBEngine.bottomCut) { setTimeout(renderVModes, 0); return; }
+    var rec = recommendV(), active = currentVMode(), floorSurf = isFloorSurf();
+    el.innerHTML = '';
+    VMODES.forEach(function (m) {
+      var c = vBottomCut(m.id), cut = c !== null && c < state.th - 0.02;
+      var b = document.createElement('button');
+      b.className = 'mode';
+      b.setAttribute('aria-pressed', active === m.id ? 'true' : 'false');
+      var desc = floorSurf
+        ? ({ cutbot: 'All the cut lands on the near edge', vbal: 'Same size cut at the near and far walls',
+             fullbot: 'Start flush at one wall, cut at the other' })[m.id]
+        : m.desc;
+      var cls = (cut && c <= SLIVER) ? 'style="color:var(--warn)"' : (cut ? 'style="color:var(--chalk-deep)"' : 'style="color:var(--ink-soft)"');
+      b.innerHTML = '<div class="mtext"><div class="mname">' + (floorSurf ? m.name.replace('bottom', 'near edge').replace('top and bottom', 'both edges') : m.name) +
+        ' ' + (m.id === rec ? '<span class="rec">Best lay</span>' : '') + '</div><div class="mdesc">' + desc + '</div></div>' +
+        '<div class="mcut mono" ' + cls + '>' + (c === null ? '—' : cut ? toDim(c) : 'full') +
+        '<small>' + (floorSurf ? 'near edge' : 'bottom course') + '</small></div>';
+      b.addEventListener('click', function () { state.vmode = m.id; sync(); });
+      el.appendChild(b);
+    });
+    if (note) note.innerHTML = floorSurf
+      ? 'A floor has two edges people see, so the cut gets split between them — same reason the across-the-room default is centered.'
+      : (isWetJob()
+        ? 'A shower pan slopes to the drain, so the bottom course is <b>never</b> a full tile you set first. Snap a level line, run the full courses off a ledger, and scribe that bottom course in last.'
+        : 'This wall lands on something level, so a full course at the bottom is fine and the cut goes up top.');
+  }
+
   function render() {
     var W = A().w, tile = state.tw, grout = state.grout;
     if (!(W > 0) || !(tile > 0)) return;
@@ -1314,6 +1378,8 @@ window.TBstate = {
       btn.addEventListener('click', function () { state.mode = m.id; render(); });
       modesEl.appendChild(btn);
     });
+
+    renderVModes();
 
     var endCutW, sliver = false, headline;
     if (active === 'left') {
@@ -1354,15 +1420,22 @@ window.TBstate = {
     document.getElementById('s-total').textContent = r.tiles.length;
 
     window.TB = {
-      wall: A().w, height: A().h, tile: state.tw, tw: state.tw, th: state.th, grout: grout, mode: active, shape: state.shape,
+      wall: A().w, height: A().h, tile: state.tw, tw: state.tw, th: state.th, grout: grout, mode: active, vmode: currentVMode(), shape: state.shape, sheetStyle: state.shape === 'sheet' ? (state.sheetStyle || 'penny') : null,
       surface: (/floor|pan/i.test(A().t) ? 'floor' : 'wall'),
       pattern: (window.TB && window.TB.pattern) || 'straight',
       holes: (A().holes || []).slice(),
       niches: (A().niches || []).slice(),
       bands: (A().bands || []).slice(),
+      boxes: (A().boxes || []).slice(),
       wTop: A().wTop || null,
       trim: A().trim || null,
-      surfaces: state.surfaces.map(function (s) { return { w: s.w, h: s.h, wTop: s.wTop || null, type: s.t, holes: (s.holes || []).slice(), niches: (s.niches || []).slice(), bands: (s.bands || []).slice(), trim: s.trim || null }; }),
+      // each surface carries its own vertical start — a pan and the wall above it want
+      // opposite answers, so the job total can't reuse whichever one is on screen
+      surfaces: state.surfaces.map(function (s, i) {
+        return { w: s.w, h: s.h, wTop: s.wTop || null, type: s.t, holes: (s.holes || []).slice(), niches: (s.niches || []).slice(), bands: (s.bands || []).slice(), boxes: (s.boxes || []).slice(), trim: s.trim || null,
+                 vmode: (i === state.active) ? currentVMode()
+                      : (/floor|pan|hearth/i.test(s.t || '') ? 'vbal' : (isWetJob() ? 'cutbot' : 'fullbot')) };
+      }),
       active: state.active
     };
     state.lastMode = active;
@@ -1411,19 +1484,33 @@ window.TBstate = {
   function refreshChips() {
     var U = window.TBU;
     makeChips('wall-chips', [30, 32, 36, 48, 60], function (v) { return U.fmt(v); },
-      function (v) { A().w = v; document.getElementById('wall').value = U.num(v); state.mode = null; renderSurfList(); sync(); },
+      function (v) { A().w = v; document.getElementById('wall').value = U.num(v); state.mode = null; state.vmode = null; renderSurfList(); sync(); },
       function (v) { return Math.abs(A().w - v) < .001; });
     makeChips('height-chips', [48, 60, 72, 84, 96], function (v) { return U.fmt(v); },
       function (v) { A().h = v; document.getElementById('height').value = U.num(v); renderSurfList(); sync(); },
       function (v) { return Math.abs(A().h - v) < .001; });
-    // squares AND planks — 12×24 is the most-sold tile there is
-    makeChips('tile-chips', [[3, 6], [4, 4], [6, 6], [12, 12], [6, 24], [12, 24], [24, 24]],
-      function (v) { return U.metric() ? U.num(v[0]) + '×' + U.num(v[1]) : v[0] + '×' + v[1] + '″'; },
-      function (v) { state.tw = v[0]; state.th = v[1]; showTile(); state.mode = null; sync(); },
-      function (v) { return Math.abs(state.tw - v[0]) < .001 && Math.abs(state.th - v[1]) < .001; });
+    // the size presets follow the SHAPE — a hex is bought across the flats and a mosaic
+    // is bought by the sheet, so showing 12×24 planks under either is just wrong
+    if (state.shape === 'hex') {
+      makeChips('tile-chips', [2, 4, 5, 6, 8, 10, 12],
+        function (v) { return U.metric() ? U.num(v) : v + '″'; },
+        function (v) { state.tw = state.th = v; showTile(); state.mode = null; state.vmode = null; sync(); },
+        function (v) { return Math.abs(state.tw - v) < .001; });
+    } else if (state.shape === 'sheet') {
+      makeChips('tile-chips', SHEET_STYLES,
+        function (v) { return v.n + ' · ' + (U.metric() ? U.num(v.w) + '×' + U.num(v.h) : v.w + '×' + v.h + '″'); },
+        function (v) { state.sheetStyle = v.id; state.tw = v.w; state.th = v.h; showTile(); state.mode = null; state.vmode = null; sync(); },
+        function (v) { return state.sheetStyle === v.id && Math.abs(state.tw - v.w) < .001 && Math.abs(state.th - v.h) < .001; });
+    } else {
+      // squares AND planks — 12×24 is the most-sold tile there is
+      makeChips('tile-chips', [[3, 6], [4, 4], [6, 6], [12, 12], [6, 24], [12, 24], [24, 24]],
+        function (v) { return U.metric() ? U.num(v[0]) + '×' + U.num(v[1]) : v[0] + '×' + v[1] + '″'; },
+        function (v) { state.tw = v[0]; state.th = v[1]; showTile(); state.mode = null; state.vmode = null; sync(); },
+        function (v) { return Math.abs(state.tw - v[0]) < .001 && Math.abs(state.th - v[1]) < .001; });
+    }
     makeChips('grout-chips', [0.0625, 0.125, 0.1875, 0.25],
       function (v) { return U.metric() ? U.fmt(v) : ({ '0.0625': '1/16″', '0.125': '1/8″', '0.1875': '3/16″', '0.25': '1/4″' })[v]; },
-      function (v) { state.grout = v; state.mode = null; sync(); },
+      function (v) { state.grout = v; state.mode = null; state.vmode = null; sync(); },
       function (v) { return Math.abs(state.grout - v) < .0001; });
   }
   function showTile() {
@@ -1439,8 +1526,9 @@ window.TBstate = {
       b.setAttribute('aria-pressed', state.shape === k[0] ? 'true' : 'false');
       b.addEventListener('click', function () {
         state.shape = k[0];
-        if (k[0] === 'hex') state.th = state.tw;             // a hex is one dimension
-        state.mode = null; renderShape(); sync();
+        if (k[0] === 'hex') { state.th = state.tw = (state.tw <= 12 ? state.tw : 12); }  // a hex is one dimension, bought across the flats
+        if (k[0] === 'sheet') { if (!state.sheetStyle) state.sheetStyle = 'penny'; state.tw = 12; state.th = 12; showTile(); }
+        state.mode = null; state.vmode = null; renderShape(); sync();
         window.dispatchEvent(new Event('tb-shape'));
       });
       host.appendChild(b);
@@ -1488,23 +1576,23 @@ window.TBstate = {
   }
   function sync() { refreshChips(); render(); }
 
-  document.getElementById('wall').addEventListener('input', function (e) { A().w = window.TBU.toIn(parseFloat(e.target.value) || 0); state.mode = null; renderSurfList(); sync(); });
+  document.getElementById('wall').addEventListener('input', function (e) { A().w = window.TBU.toIn(parseFloat(e.target.value) || 0); state.mode = null; state.vmode = null; renderSurfList(); sync(); });
   document.getElementById('height').addEventListener('input', function (e) { A().h = window.TBU.toIn(parseFloat(e.target.value) || 0); renderSurfList(); sync(); });
   document.getElementById('wtop').addEventListener('input', function (e) {
     var v = parseFloat(e.target.value);
-    A().wTop = (v > 0) ? window.TBU.toIn(v) : null; state.mode = null; sync(); squareReport();
+    A().wTop = (v > 0) ? window.TBU.toIn(v) : null; state.mode = null; state.vmode = null; sync(); squareReport();
   });
   document.getElementById('wtop-clear').addEventListener('click', function () {
     A().wTop = null; document.getElementById('wtop').value = ''; sync(); squareReport();
   });
   (function () {
     var tw = document.getElementById('tile'), th = document.getElementById('tile-h');
-    tw.addEventListener('input', function (e) { var v = parseFrac(e.target.value); if (v > 0) { state.tw = v; state.mode = null; sync(); } });
-    th.addEventListener('input', function (e) { var v = parseFrac(e.target.value); if (v > 0) { state.th = v; state.mode = null; sync(); } });
+    tw.addEventListener('input', function (e) { var v = parseFrac(e.target.value); if (v > 0) { state.tw = v; state.mode = null; state.vmode = null; sync(); } });
+    th.addEventListener('input', function (e) { var v = parseFrac(e.target.value); if (v > 0) { state.th = v; state.mode = null; state.vmode = null; sync(); } });
     tw.addEventListener('blur', function () { if (state.tw > 0) tw.value = fmtFrac(state.tw); });
     th.addEventListener('blur', function () { if (state.th > 0) th.value = fmtFrac(state.th); });
     document.getElementById('tile-swap').addEventListener('click', function () {
-      var t = state.tw; state.tw = state.th; state.th = t; showTile(); state.mode = null; sync();
+      var t = state.tw; state.tw = state.th; state.th = t; showTile(); state.mode = null; state.vmode = null; sync();
     });
   })();
   // a unit switch changes nothing about the job — only how it reads
@@ -1512,7 +1600,7 @@ window.TBstate = {
   window.addEventListener('tb-room', function () { renderHeat(); });
 
   // ---- job type + surfaces list ----
-  var JOB_LABELS = [['shower', 'Shower'], ['floor', 'Floor'], ['backsplash', 'Backsplash'], ['fireplace', 'Fireplace'], ['custom', 'Custom']];
+  var JOB_LABELS = [['shower', 'Shower'], ['floor', 'Floor'], ['wall', 'Wall'], ['backsplash', 'Backsplash'], ['fireplace', 'Fireplace'], ['custom', 'Custom']];
   function loadActive() {
     var a = A();
     showSize();
@@ -1530,7 +1618,7 @@ window.TBstate = {
     var showerish = state.job === 'shower' || state.job === 'custom';
     var nc = document.getElementById('niche-add'); if (nc) nc.closest('.card').hidden = !(wallLike && showerish);
     var bc = document.getElementById('band-add'); if (bc) bc.closest('.card').hidden = !wallLike;
-    renderHoleAdd(); renderHoles(); renderNiches(); renderTrim(); renderBands(); renderHeat();
+    renderHoleAdd(); renderHoles(); renderNiches(); renderTrim(); renderBands(); renderBoxes(); renderHeat();
   }
   function renderJobs() {
     var host = document.getElementById('job-type'); host.innerHTML = '';
@@ -1538,7 +1626,7 @@ window.TBstate = {
       var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = j[1];
       b.setAttribute('aria-pressed', state.job === j[0] ? 'true' : 'false');
       b.addEventListener('click', function () {
-        state.job = j[0]; state.surfaces = jobSurfaces(j[0]); state.active = 0; state.mode = null;
+        state.job = j[0]; state.addKey = j[0]; state.surfaces = jobSurfaces(j[0]); state.active = 0; state.mode = null; state.vmode = null;
         renderJobs(); renderAdds(); renderSurfList(); loadActive(); sync();
       });
       host.appendChild(b);
@@ -1557,7 +1645,7 @@ window.TBstate = {
           if (state.active >= state.surfaces.length) state.active = state.surfaces.length - 1;
           state.job = 'custom'; renderJobs(); renderSurfList(); loadActive(); sync(); return;
         }
-        state.active = i; state.mode = null; renderSurfList(); loadActive(); sync();
+        state.active = i; state.mode = null; state.vmode = null; renderSurfList(); loadActive(); sync();
       });
       host.appendChild(el);
     });
@@ -1650,9 +1738,29 @@ window.TBstate = {
       : '<span>⚠ ' + offs.map(function (p) { return p[0] + ' is ' + toDim(p[1].off) + ' off'; }).join(', ') +
         ' the nearest joint.</span><button class="niche-snap" type="button">Snap to joints</button>' };
   }
+  /* A niche opening is four raw tile edges. Something has to finish them — the same family
+     of details that runs across the field also runs around an opening, which is why these
+     are the trim list, not a separate idea. `unit` is the length of one purchased piece. */
+  var NICHE_EDGES = [
+    { id: 'none',     name: 'Nothing — field tile to the edge', unit: 0,  buy: '' },
+    { id: 'schluter', name: 'Schluter metal edging',            unit: 96, buy: 'stick' },
+    { id: 'pencil',   name: 'Pencil border',                    unit: 12, buy: 'piece' },
+    { id: 'bullnose', name: 'Bullnose',                         unit: 12, buy: 'piece' },
+    { id: 'stripe',   name: 'Stripe / accent surround',         unit: 12, buy: 'piece' }
+  ];
+  function nicheEdge(n) {
+    return NICHE_EDGES.filter(function (e) { return e.id === (n && n.edge); })[0] || NICHE_EDGES[0];
+  }
   function trimHTML(n) {
-    return 'Sill <b>' + fmtFrac(n.w) + ' × ' + fmtFrac(n.d) + '</b> · head <b>' + fmtFrac(n.w) + ' × ' + fmtFrac(n.d) +
+    var base = 'Sill <b>' + fmtFrac(n.w) + ' × ' + fmtFrac(n.d) + '</b> · head <b>' + fmtFrac(n.w) + ' × ' + fmtFrac(n.d) +
       '</b> · 2 jambs <b>' + fmtFrac(n.h) + ' × ' + fmtFrac(n.d) + '</b> — pitch the sill 1/8″ in.';
+    var e = nicheEdge(n);
+    if (e.id === 'none') return base;
+    // the border wraps the opening, so it is the opening's perimeter — not the box's inside
+    var per = 2 * (n.w + n.h), cnt = Math.ceil(per / e.unit);
+    return base + '<br><b>' + e.name + '</b> around the opening — <b>' + fmtFrac(per) + '″</b> (' +
+      (per / 12).toFixed(1) + ' ft) → <b>' + cnt + '</b> ' + e.buy + (cnt === 1 ? '' : 's') +
+      (e.buy === 'stick' ? ' at 8 ft. Mitre the corners.' : '. Mitre or butt the corners.');
   }
   // update one card's status in place — rebuilding the list on every keystroke
   // would tear out the focused field and shut the phone keyboard mid-number
@@ -1688,10 +1796,17 @@ window.TBstate = {
         '<label>Wide<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(n.w) + '"></label>' +
         '<label>Tall<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(n.h) + '"></label>' +
         '<label>Deep<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(n.d) + '"></label>' +
-        '</div><div class="niche-align"></div><div class="niche-trim"></div>';
+        '</div><label class="niche-edge">Border around the opening' +
+        '<select>' + NICHE_EDGES.map(function (e) {
+          return '<option value="' + e.id + '"' + ((n.edge || 'none') === e.id ? ' selected' : '') + '>' + e.name + '</option>';
+        }).join('') + '</select></label>' +
+        '<div class="niche-align"></div><div class="niche-trim"></div>';
       var ins = box.querySelectorAll('.niche-grid input');
       ['x', 'y', 'w', 'h', 'd'].forEach(function (k, j) {
         ins[j].addEventListener('input', function () { n[k] = window.TBU.toIn(parseFloat(ins[j].value) || 0); refreshNiche(box, n); render(); });
+      });
+      box.querySelector('.niche-edge select').addEventListener('change', function (e) {
+        n.edge = e.target.value; refreshNiche(box, n); render();
       });
       box.querySelector('.del').addEventListener('click', function () { a.niches.splice(i, 1); renderNiches(); render(); });
       host.appendChild(box);
@@ -1781,12 +1896,36 @@ window.TBstate = {
   }
   document.getElementById('trim-w').addEventListener('input', function (e) { trimOf().w = window.TBU.toIn(parseFloat(e.target.value) || 0); renderTrim(); render(); });
 
-  /* ---- accent bands ---- */
+  /* ---- accent bands and borders ----
+     These are all the same thing to the layout engine — a run of narrow material across the
+     field — but they are NOT the same thing on the order sheet. A stripe is tile you buy by
+     the piece; a Schluter profile and a chair rail come in 8 ft sticks; a pencil liner is
+     sold in short pieces. Getting that wrong is how you end up one stick short on a Sunday.
+     `unit` is the length one purchased piece covers; null means "the piece width you typed". */
+  var BAND_KINDS = [
+    { id: 'stripe',  name: 'Stripe',          y: 48, h: 4,     tw: 12, unit: null, buy: 'piece',
+      desc: 'A run of accent tile across the field' },
+    { id: 'chair',   name: 'Chair rail',      y: 36, h: 2,     tw: 12, unit: 96,   buy: 'stick',
+      desc: 'Moulded rail at chair height, ~36″ up' },
+    { id: 'pencil',  name: 'Pencil border',   y: 48, h: 0.5,   tw: 12, unit: 12,   buy: 'piece',
+      desc: 'Thin pencil liner — a line, not a band' },
+    { id: 'schluter',name: 'Schluter edging', y: 48, h: 0.375, tw: 96, unit: 96,   buy: 'stick',
+      desc: 'Metal profile run horizontally through the field' },
+    { id: 'mosaic',  name: 'Mosaic strip',    y: 60, h: 6,     tw: 12, unit: 12,   buy: 'sheet',
+      desc: 'Sheet mosaic as a wide feature band' },
+    { id: 'box',     name: 'Box pattern',     y: 0,  h: 0,     tw: 0,  unit: null, buy: 'piece',
+      desc: 'A framed panel — border running around a rectangle' }
+  ];
+  function bandKind(b) {
+    var k = BAND_KINDS.filter(function (x) { return x.id === (b && b.kind); })[0];
+    return k || BAND_KINDS[0];      // anything saved before kinds existed reads as a stripe
+  }
+
   function renderBands() {
     var host = document.getElementById('band-list'), a = A(), U = window.TBU;
     if (!a.bands) a.bands = [];
     host.innerHTML = '';
-    if (!a.bands.length) { host.innerHTML = '<p class="niche-empty">No bands on this surface yet.</p>'; return; }
+    if (!a.bands.length) { if (!(a.boxes && a.boxes.length)) host.innerHTML = '<p class="niche-empty">No bands or borders on this surface yet.</p>'; return; }
     a.bands.forEach(function (b, i) {
       var box = document.createElement('div'); box.className = 'band-item';
       box.innerHTML =
@@ -1805,24 +1944,83 @@ window.TBstate = {
     });
   }
   function bandNote(box, b) {
-    var a = A(), tr = trimIn2(trimOf());
+    var a = A(), tr = trimIn2(trimOf()), k = bandKind(b);
     var fw = a.w - tr.l - tr.r;
     var run = fw, per = b.tw > 0 ? b.tw : 12;
+    // a profile butts end to end, tile takes a joint between pieces
+    var pitch = (k.buy === 'stick') ? (k.unit || per) : (per + state.grout);
+    var n = Math.ceil(run / pitch);
+    var unitTxt = (k.buy === 'stick') ? '<b>' + n + '</b> stick' + (n === 1 ? '' : 's') + ' at 8 ft'
+                : (k.buy === 'sheet') ? '<b>' + n + '</b> sheet' + (n === 1 ? '' : 's') + ' at ' + fmtFrac(per) + '″'
+                : '<b>' + n + '</b> piece' + (n === 1 ? '' : 's') + ' at ' + fmtFrac(per) + '″';
     box.querySelector('.band-note').innerHTML = 'Runs <b>' + fmtFrac(run) + '″</b> across at <b>' + fmtFrac(b.y) + '″</b> up, ' +
-      fmtFrac(b.h) + '″ tall — about <b>' + Math.ceil(run / (per + state.grout)) + '</b> pieces at ' + fmtFrac(per) + '″.';
+      fmtFrac(b.h) + '″ tall — ' + unitTxt + '.' +
+      (k.buy === 'stick' ? ' Profiles butt end to end, so no joint between sticks.' : '');
   }
   function trimIn2(tr) { var w = tr && tr.w || 0; return { l: tr && tr.l ? w : 0, r: tr && tr.r ? w : 0, t: tr && tr.t ? w : 0, b: tr && tr.b ? w : 0 }; }
   function renderBandAdd() {
     var host = document.getElementById('band-add'); host.innerHTML = '';
-    [['Accent band', 48, 4, 12], ['Chair rail', 36, 2, 12], ['Mosaic strip', 60, 6, 12]].forEach(function (k) {
-      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = '+ ' + k[0];
+    BAND_KINDS.forEach(function (k) {
+      var b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = '+ ' + k.name;
+      b.title = k.desc;
       b.addEventListener('click', function () {
         var a = A(); if (!a.bands) a.bands = [];
-        a.bands.push({ t: k[0], y: Math.min(k[1], Math.max(0, a.h - k[2])), h: k[2], tw: k[3] });
+        if (k.id === 'box') { addBox(); return; }
+        a.bands.push({ t: k.name, kind: k.id, y: Math.min(k.y, Math.max(0, a.h - k.h)), h: k.h, tw: k.tw });
         renderBands(); render();
       });
       host.appendChild(b);
     });
+  }
+
+  /* ---- box pattern cards ---- */
+  function addBox() {
+    var a = A(); if (!a.boxes) a.boxes = [];
+    // centred panel a third of the wall wide, 3″ border — proportions people actually frame
+    var w = Math.max(12, Math.round(a.w / 3)), h = Math.max(12, Math.round(a.h / 3));
+    a.boxes.push({ t: 'Box ' + (a.boxes.length + 1), x: Math.max(0, (a.w - w) / 2),
+                   y: Math.max(0, (a.h - h) / 2), w: w, h: h, tw: 3 });
+    renderBoxes(); render();
+  }
+  function renderBoxes() {
+    var host = document.getElementById('box-list'), a = A(), U = window.TBU;
+    if (!host) return;
+    if (!a.boxes) a.boxes = [];
+    host.innerHTML = '';
+    a.boxes.forEach(function (b, i) {
+      var box = document.createElement('div'); box.className = 'band-item';
+      box.innerHTML =
+        '<div class="niche-top"><span class="hname">' + b.t + '</span><button class="del" type="button" aria-label="Remove box">×</button></div>' +
+        '<div class="niche-grid">' +
+        '<label>From left<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(b.x) + '"></label>' +
+        '<label>Up<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(b.y) + '"></label>' +
+        '<label>Wide<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(b.w) + '"></label>' +
+        '<label>Tall<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(b.h) + '"></label>' +
+        '<label>Border<input type="number" step="0.25" min="0" inputmode="decimal" value="' + U.num(b.tw) + '"></label>' +
+        '</div><div class="band-note"></div>';
+      var ins = box.querySelectorAll('.niche-grid input');
+      ['x', 'y', 'w', 'h', 'tw'].forEach(function (k, j) {
+        ins[j].addEventListener('input', function () { b[k] = window.TBU.toIn(parseFloat(ins[j].value) || 0); boxNote(box, b); render(); });
+      });
+      box.querySelector('.del').addEventListener('click', function () { a.boxes.splice(i, 1); renderBoxes(); render(); });
+      host.appendChild(box); boxNote(box, b);
+    });
+  }
+  function boxNote(el, b) {
+    var bad = !(b.w > 2 * b.tw && b.h > 2 * b.tw && b.tw > 0);
+    var a = A();
+    var hitsNiche = (a.niches || []).some(function (n) {
+      if (!(n.w > 0 && n.h > 0)) return false;
+      // both live in from-left / up-from-floor coordinates, so compare directly
+      return b.x < n.x + n.w && b.x + b.w > n.x && b.y < n.y + n.h && b.y + b.h > n.y;
+    });
+    var per = 2 * (b.w - b.tw) + 2 * (b.h - b.tw);   // centreline of the ring — what you buy to
+    el.querySelector('.band-note').innerHTML = bad
+      ? '⚠ The border is wider than the box allows — the panel inside would vanish.'
+      : hitsNiche
+      ? '⚠ This box runs into the niche opening — a mitred border can\'t cross a hole. Move one of them; the box is left out of the layout until they clear.'
+      : 'Panel inside comes to <b>' + fmtFrac(b.w - 2 * b.tw) + '″ × ' + fmtFrac(b.h - 2 * b.tw) + '″</b>. ' +
+        'Border run ~<b>' + fmtFrac(per) + '″</b> on the centreline — mitre the four corners.';
   }
 
   /* ---- heated floor ----
@@ -1933,6 +2131,7 @@ window.TBstate = {
   var ADDS = {
     shower:     ['wall', 'floor', 'curb'],
     floor:      ['floor', 'curb', 'threshold'],
+    wall:       ['wall'],
     backsplash: ['wall'],
     fireplace:  ['wall', 'hearth'],
     custom:     ['wall', 'floor', 'curb', 'threshold', 'hearth']
@@ -1947,7 +2146,7 @@ window.TBstate = {
     var host = document.getElementById('surf-adds');
     if (!host) return;
     host.innerHTML = '';
-    (ADDS[state.job] || ADDS.custom).forEach(function (k) {
+    (ADDS[state.addKey || state.job] || ADDS.custom).forEach(function (k) {
       var b = document.createElement('button');
       b.className = 'btn-ghost'; b.type = 'button';
       if (k === 'curb') {
@@ -2079,12 +2278,14 @@ window.TBstate = {
 
 
   window.TBstate.register('layout', function () {
-    return { job: state.job, surfaces: JSON.parse(JSON.stringify(state.surfaces)), active: state.active, tw: state.tw, th: state.th, grout: state.grout, mode: state.mode, shape: state.shape };
+    return { job: state.job, addKey: state.addKey, surfaces: JSON.parse(JSON.stringify(state.surfaces)), active: state.active, tw: state.tw, th: state.th, grout: state.grout, mode: state.mode, vmode: state.vmode, shape: state.shape, sheetStyle: state.sheetStyle || null };
   }, function (v) {
     state.job = v.job; state.surfaces = v.surfaces; state.active = v.active || 0;
     state.tw = v.tw !== undefined ? v.tw : (v.tile || 12);      // jobs saved before planks existed
     state.th = v.th !== undefined ? v.th : (v.tile || 12);
-    state.grout = v.grout; state.mode = v.mode; state.shape = v.shape || 'rect';
+    state.grout = v.grout; state.mode = v.mode; state.vmode = v.vmode || null; state.shape = v.shape || 'rect';
+    state.sheetStyle = v.sheetStyle || null;
+    state.addKey = v.addKey || v.job;
     showTile(); renderShape();
     renderJobs(); renderAdds(); renderSurfList(); loadActive(); sync();
   });
@@ -2137,6 +2338,45 @@ window.TBstate = {
   function applyThinset() {
     state.thinCov = Math.round(state.trowelBase * (state.backbutter ? 0.82 : 1));
     document.getElementById('thin-cov').value = state.thinCov;
+  }
+
+  /* Grout coverage used to be a five-option dropdown you set by hand, which meant a job could
+     be laid in 3×6 subway and still be ordering grout for a 12×12. It isn't a preference —
+     it falls straight out of the tile and the joint you already entered.
+
+     Per tile cell the grout is everything the tile doesn't fill:  1 − LW / ((L+J)(W+J))
+     Joint depth cancels because it multiplies both sides, so no thickness input is needed.
+     Scaled off the old 12×12 @ 1/8″ = 70 anchor, so an existing 12×12 job doesn't move. */
+  var GROUT_REF = (function () { var L = 12, J = 0.125; return 1 - (L * L) / ((L + J) * (L + J)); })();
+  function groutCoverage(L, W, J) {
+    if (!(L > 0) || !(W > 0)) return 70;
+    J = J > 0 ? J : 0.0625;
+    var frac = 1 - (L * W) / ((L + J) * (W + J));
+    if (!(frac > 1e-9)) return 70;
+    return Math.max(10, Math.min(400, Math.round(70 * GROUT_REF / frac)));   // floor: even penny rounds beat 10
+  }
+  function applyGrout() {
+    var T = window.TB || {}, L = T.tw || state.tw || 12, W = T.th || state.th || 12, J = T.grout;
+    if (!(J > 0)) J = state.grout > 0 ? state.grout : 0.125;
+    var whyTxt;
+    if (T.shape === 'sheet') {
+      // grout fills the joints between the little PIECES, not between sheets — a penny
+      // sheet at 12×12 is not one tile, it is ~150 of them. This is why mosaic jobs
+      // eat grout: the piece is small, so the joint fraction is huge.
+      var pc = ({ penny: [0.75, 0.75], hex1: [1, 1], hex2: [2, 2], sq1: [1, 1], sq2: [2, 2], kit: [0.5, 2.5] })[T.sheetStyle] || [1, 1];
+      // fine mosaic factory spacing is 1/16″; bigger mosaic pieces run up to 1/8″.
+      // The sheet-to-sheet joint the user set doesn't govern the piece joints.
+      var pj = Math.min(pc[0], pc[1]) < 1.5 ? 0.0625 : Math.min(J, 0.125);
+      L = pc[0]; W = pc[1]; J = pj;
+      whyTxt = 'sq ft per 25 lb bag · from the ' + window.TBU.numStr(L) + '×' + window.TBU.numStr(W) + '″ pieces, not the sheet';
+    } else {
+      if (T.shape === 'hex' || T.pattern === 'hex') { W = L = Math.min(L, W); }   // across-flats behaves like a square of that side
+      whyTxt = 'sq ft per 25 lb bag · from ' + window.TBU.numStr(L) + '×' + window.TBU.numStr(W) + ' at a ' + window.TBU.numStr(J) + '″ joint';
+    }
+    state.groutCov = groutCoverage(L, W, J);
+    var el = document.getElementById('grout-cov'); if (el) el.value = state.groutCov;
+    var why = document.getElementById('grout-cov-why');
+    if (why) why.textContent = whyTxt;
   }
   function sqft(s) { return (s.w * s.h) / 144; }
 
@@ -2202,7 +2442,7 @@ window.TBstate = {
       (touched && state.waste !== w ? ' (you have set ' + state.waste + '%)' : '') +
       '. <span class="muted">Change it on the Layout tab.</span>';
   }
-  window.addEventListener('tb-change', function () { renderPatterns(); renderJobSurfaces(); compute(); });
+  window.addEventListener('tb-change', function () { applyGrout(); renderPatterns(); renderJobSurfaces(); compute(); });
   window.addEventListener('tb-room', function () { renderJobSurfaces(); compute(); });
   /* Waterproofing quantities come OUT of the job rather than being asked for again:
      wall and floor areas, the corners where planes meet, and one seal per penetration. */
@@ -2286,6 +2526,61 @@ window.TBstate = {
         (state.grtType === 'epoxy' ? ' Epoxy grout needs no sealer.' : '');
   }
 
+  /* Every band, box border and niche edge on every surface, rolled up by material.
+     These lived only on their Layout cards before — which meant the order that walked
+     into the store was missing the chair rail. Same disease as the three pattern
+     pickers: a number shown in one place and absent where the money is. */
+  function borderItems() {
+    var T = window.TB || {}, out = [], runs = {};
+    function add(key, name, sub, inches, unit, buyWord, joint) {
+      if (!(inches > 0)) return;
+      if (!runs[key]) runs[key] = { name: name, sub: sub, inches: 0, unit: unit, buy: buyWord, joint: joint };
+      runs[key].inches += inches;
+    }
+    (T.surfaces || []).forEach(function (s) {
+      var trw = s.trim || {}, w = trw.w || 0;
+      var fw = s.w - (trw.l ? w : 0) - (trw.r ? w : 0);
+      (s.bands || []).forEach(function (b) {
+        var kind = b.kind || 'stripe';
+        if (kind === 'stripe') return;                       // a stripe is field tile — already in the sq ft
+        if (kind === 'mosaic') { add('mosaic', 'Mosaic strips', 'feature band sheets', fw, b.tw > 0 ? b.tw : 12, 'sheet', T.grout); return; }
+        if (kind === 'chair') { add('chair', 'Chair rail', '8 ft sticks', fw, 96, 'stick', 0); return; }
+        if (kind === 'pencil') { add('pencil', 'Pencil liner', 'short pieces, ~12″', fw, 12, 'piece', 0); return; }
+        if (kind === 'schluter') add('schl-band', 'Schluter profile (band)', '8 ft sticks, run through the field', fw, 96, 'stick', 0);
+      });
+      (s.boxes || []).forEach(function (b) {
+        if (!(b.w > 2 * b.tw && b.h > 2 * b.tw && b.tw > 0)) return;
+        add('box', 'Box-pattern border', 'centreline run, mitred corners', 2 * (b.w - b.tw) + 2 * (b.h - b.tw), 12, 'piece', T.grout);
+      });
+      (s.niches || []).forEach(function (n) {
+        var e = n.edge || 'none';
+        if (e === 'none' || !(n.w > 0 && n.h > 0)) return;
+        var per = 2 * (n.w + n.h);
+        if (e === 'schluter') add('schl-niche', 'Schluter profile (niche)', 'around the opening, mitred', per, 96, 'stick', 0);
+        else if (e === 'pencil') add('pencil', 'Pencil liner', 'short pieces, ~12″', per, 12, 'piece', 0);
+        else if (e === 'bullnose') add('bullnose', 'Bullnose', 'around the niche opening', per, Math.max(T.tw || 12, T.th || 12), 'piece', T.grout);
+        else add('stripe-n', 'Accent surround', 'tile pieces around the niche', per, 12, 'piece', T.grout);
+      });
+    });
+    Object.keys(runs).forEach(function (k) {
+      var r = runs[k], pitch = r.buy === 'stick' ? r.unit : r.unit + (r.joint || 0);
+      var n = Math.ceil(r.inches / pitch);
+      out.push({ name: r.name, sub: r.sub + ' · ' + (r.inches / 12).toFixed(1) + ' ft total run',
+                 qty: n, unit: n === 1 ? r.buy : r.buy + 's' });
+    });
+    return out;
+  }
+
+  function tileName() {
+    var T = window.TB || {};
+    if (T.shape === 'sheet') {
+      var st = { penny: 'Penny rounds', hex1: '1″ hex', hex2: '2″ hex', sq1: '1″ squares', sq2: '2″ squares', kit: 'Kit-kat / finger' }[T.sheetStyle] || 'Mosaic';
+      return st + ' — mesh sheets';
+    }
+    if (T.shape === 'hex') return 'Hex tile (' + window.TBU.numStr(T.tw || 12) + '″ across flats)';
+    return 'Tile';
+  }
+
   function netArea() {
     var a = 0;
     jobSurfaces().forEach(function (s) { a += s.area; });
@@ -2302,12 +2597,12 @@ window.TBstate = {
     var grout = state.groutCov > 0 ? Math.ceil(net / state.groutCov) : 0;
     var backer = state.backerSheet > 0 ? Math.ceil(net / state.backerSheet) : 0;
     var items = [
-      { name: 'Tile', sub: withWaste.toFixed(1) + ' sq ft incl. ' + state.waste + '% waste · ' + state.boxCov + ' sq ft/box', qty: boxes, unit: boxes === 1 ? 'box' : 'boxes', head: true },
+      { name: tileName(), sub: withWaste.toFixed(1) + ' sq ft incl. ' + state.waste + '% waste · ' + state.boxCov + ' sq ft/box', qty: boxes, unit: boxes === 1 ? 'box' : 'boxes', head: true },
       { name: 'Thinset', sub: '50 lb bags · covers ~' + state.thinCov + ' sq ft each', qty: thin, unit: thin === 1 ? 'bag' : 'bags' },
       { name: 'Grout', sub: '25 lb bags · covers ~' + state.groutCov + ' sq ft each', qty: grout, unit: grout === 1 ? 'bag' : 'bags' },
       { name: 'Backer board', sub: 'sheets · ' + state.backerSheet + ' sq ft each', qty: backer, unit: backer === 1 ? 'sheet' : 'sheets' }
     ];
-    items = items.concat(wpItems());
+    items = items.concat(borderItems()).concat(wpItems());
     var host = document.getElementById('buy-items'); host.innerHTML = '';
     items.forEach(function (it) {
       var d = document.createElement('div');
@@ -2361,7 +2656,6 @@ window.TBstate = {
   document.getElementById('waste').addEventListener('input', function (e) { state.waste = parseFloat(e.target.value) || 0; compute(); });
   document.getElementById('trowel').addEventListener('change', function (e) { state.trowelBase = parseFloat(e.target.value) || 75; applyThinset(); compute(); });
   document.getElementById('backbutter').addEventListener('change', function (e) { state.backbutter = e.target.checked; applyThinset(); compute(); });
-  document.getElementById('tilesize').addEventListener('change', function (e) { state.groutCov = parseFloat(e.target.value) || 70; document.getElementById('grout-cov').value = state.groutCov; compute(); });
   [['wp-liqcov', 'liqCov'], ['wp-shtcov', 'shtCov'], ['wp-bandroll', 'bandRoll'], ['wp-uncov', 'unCov'],
    ['wp-silcov', 'silCov'], ['wp-sealcov', 'sealCov'], ['wp-screws', 'screws']].forEach(function (pair) {
     var el = document.getElementById(pair[0]);
@@ -2384,7 +2678,7 @@ window.TBstate = {
     state.thinCov = v.thinCov; state.groutCov = v.groutCov; state.backerSheet = v.backerSheet;
     var setv = function (id, val) { var e = document.getElementById(id); if (e) e.value = val; };
     setv('waste', v.waste); setv('box-cov', v.boxCov); setv('thin-cov', v.thinCov); setv('grout-cov', v.groutCov); setv('backer-sheet', v.backerSheet);
-    setv('trowel', v.trowelBase); setv('tilesize', v.groutCov);
+    setv('trowel', v.trowelBase);
     var bb = document.getElementById('backbutter'); if (bb) bb.checked = v.backbutter;
     if (v.prices) { for (var id in v.prices) setv(id, v.prices[id]); }
     renderSurfaces(); renderPatterns(); compute();
@@ -2604,7 +2898,34 @@ window.TBstate = {
       poly: [{ x: cl, y: row.top }, { x: cl + wT, y: row.top }, { x: cl + wB, y: row.top + row.h }, { x: cl, y: row.top + row.h }],
       fullW: Math.min(wT, wB) >= tw - 0.02, fullH: row.fullH };
   }
-  function layoutRegion(x0, x1, y0, y1, tw, th, grout, mode, pat, edge, acc) {
+  /* Vertical anchoring. Where to start left-to-right has always been a choice; up-and-down
+     the app used to force a full course flush to the bottom. That is backwards on a wet wall.
+     You snap a level line, screw a ledger, run full courses UP off it, and fill the bottom
+     course in LAST — because the pan slopes and that course has to be scribed into it.
+     Returns the y of the r=0 course's bottom; pushing it past y1 makes the bottom row a cut. */
+  function vAnchor(y0, y1, th, grout, vmode) {
+    var H = y1 - y0, modY = th + grout, c, k;
+    if (!(H > 0) || !(modY > 0) || !vmode || vmode === 'fullbot') return y1;
+    if (vmode === 'cutbot') {                       // remainder goes to the bottom course
+      k = Math.floor((H + 1e-9) / modY);
+      c = H - k * modY;
+      if (c <= SLIVER + 1e-9) c = H - (--k) * modY; // a sliver against the pan is unscribable
+    } else if (vmode === 'vbal') {
+      /* Same cut top and bottom. The top course is clipped from ABOVE, so a course slot up
+         there gives back th, not modY — miss that and the two ends come out a grout joint
+         apart. With n slots above the bottom cut:  top = H − c − n·modY + th, and setting
+         top = c gives c = (H + th − n·modY)/2. Take the smallest n that keeps c ≤ th, which
+         is the largest legal cut — and that bound also makes c > (th−grout)/2, so balancing
+         can never produce a sliver. */
+      k = Math.ceil((H - th - 1e-9) / modY);
+      if (k < 1) k = 1;
+      c = (H + th - k * modY) / 2;
+    } else return y1;
+    if (!(c > 0) || c >= th - 0.02) return y1;      // a full course already lands there
+    return y1 + th - c;
+  }
+
+  function layoutRegion(x0, x1, y0, y1, tw, th, grout, mode, pat, edge, acc, vmode) {
     var modX = tw + grout, modY = th + grout, tiles = [], baseAnchor;
     if (x1 - x0 <= 0.02 || y1 - y0 <= 0.02 || !(tw > 0) || !(th > 0)) return tiles;
     var EG = edge || function () { return x1; };
@@ -2616,9 +2937,9 @@ window.TBstate = {
       if (pat === 'thirds') return ((((ri % 3) + 3) % 3) * tw / 3);
       return 0; // straight / vertical
     }
-    var rows = [], r = 0;
+    var rows = [], r = 0, vBase = vAnchor(y0, y1, th, grout, vmode);
     while (r < 6000) {
-      var top = y1 - th - r * modY, bottom = top + th;
+      var top = vBase - th - r * modY, bottom = top + th;
       if (bottom <= y0 + 0.02) break;
       var ct = Math.max(y0, top), cb = Math.min(y1, bottom);
       if (cb - ct > MIN_W) rows.push({ top: ct, h: cb - ct, fullH: (cb - ct) >= th - 0.02, ri: r });
@@ -2693,9 +3014,13 @@ window.TBstate = {
     var F = fieldRegions(W, H, tr, bands);
     return F.segs.map(function (s) { return { x: F.x0, y: s[0], w: F.x1 - F.x0, h: s[1] - s[0] }; });
   }
-  function fieldTiles(W, H, tw, th, grout, mode, pat, tr, bands, wTop, acc) {
+  function fieldTiles(W, H, tw, th, grout, mode, pat, tr, bands, wTop, acc, vmode) {
     var F = fieldRegions(W, H, tr, bands), out = [], eg = edgeFn(W, H, wTop, tr);
-    F.segs.forEach(function (s) { out = out.concat(layoutRegion(F.x0, F.x1, s[0], s[1], tw, th, grout, mode, pat, eg, acc)); });
+    // segs are bottom-most first. The vertical choice only belongs to the course that meets
+    // the pan — above an accent band you start full off the band, because the band IS level.
+    F.segs.forEach(function (s, i) {
+      out = out.concat(layoutRegion(F.x0, F.x1, s[0], s[1], tw, th, grout, mode, pat, eg, acc, i === 0 ? vmode : null));
+    });
     return out;
   }
   // an accent band is its own little run of tile across the field
@@ -2847,16 +3172,18 @@ window.TBstate = {
   /* Subtract the opening from ANY piece — rectangle, scribe trapezoid or hexagon —
      and refill the opening with the same geometry, so the two cancel exactly. A shaped
      piece broken by a niche stops pretending to be a tidy W × H and reports as a shape. */
-  function subtractNiches(tiles, boxes, fullA, acc) {
+  function subtractNiches(tiles, boxes, fullA, acc, interiorCovered) {
     if (!boxes || !boxes.length) return { field: tiles, interior: [] };
     var rects = [], polys = [];
     tiles.forEach(function (t) { (t.poly ? polys : rects).push(t); });
     var field = applyNiches(rects, boxes), interior = [];
     boxes.forEach(function (b) {
       rects.forEach(function (t) {
-        var c = clipRect({ x: t.x, y: t.y, w: t.w, h: t.h }, b);
-        if (c) interior.push({ x: c.x, y: c.y, w: c.w, h: c.h, role: 'niche back',
-          fullW: c.w >= t.w - 0.02, fullH: c.h >= t.h - 0.02 });
+        (t.parts || [t]).forEach(function (q) {
+          var c = clipRect({ x: q.x, y: q.y, w: q.w, h: q.h }, b);
+          if (c) interior.push({ x: c.x, y: c.y, w: c.w, h: c.h, role: 'niche back',
+            fullW: c.w >= t.w - 0.02, fullH: c.h >= t.h - 0.02 });
+        });
       });
     });
     function like(t, pg, role) {
@@ -2872,7 +3199,7 @@ window.TBstate = {
       if (!hits.length) { field.push(t); return; }
       hits.forEach(function (b) {
         var c = clipToRect(t.poly, b.x, b.y, b.x + b.w, b.y + b.h);
-        if (c.length > 2) { var ca = polyArea2(c); if (ca > HEX_MIN) interior.push(like(t, c, 'niche back')); else if (acc) acc.dropped += ca; }
+        if (c.length > 2) { var ca = polyArea2(c); if (ca > HEX_MIN) interior.push(like(t, c, 'niche back')); else if (acc && !interiorCovered) acc.dropped += ca; }
       });
       var pieces = [t.poly];
       hits.forEach(function (b) {
@@ -3038,13 +3365,107 @@ window.TBstate = {
     return (niches || []).filter(function (n) { return n.w > 0 && n.h > 0; })
       .map(function (n) { return { x: n.x, y: H - n.y - n.h, w: n.w, h: n.h, src: n }; });
   }
+
+  /* ---- box pattern (a framed panel) ----
+     A stripe runs wall to wall, so the field engine can just slice the wall into stacked
+     regions and be done. A box doesn't touch the ends, so it can't. What it IS, though, is
+     a rectangle cut out of the field with a border ring inside it — and the engine already
+     cuts rectangles out of the field for niches. So a box reuses that exact path: subtract
+     the outer rectangle, run four border pieces around the ring, and lay the panel inside
+     the ring as its own little field. Nothing new about the hard part. */
+  function boxFrames(boxes, H) {
+    // b.t is the TITLE — the border width is b.tw. (Caught by hand-checking a ring:
+    // the filter read the title, threw every box away, and the self-test 'passed'.)
+    return (boxes || []).filter(function (b) { return b.w > 0 && b.h > 0 && b.tw > 0 && b.w > 2 * b.tw && b.h > 2 * b.tw; })
+      .map(function (b) {
+        var o = { x: b.x, y: H - b.y - b.h, w: b.w, h: b.h, src: b };
+        o.inner = { x: o.x + b.tw, y: o.y + b.tw, w: b.w - 2 * b.tw, h: b.h - 2 * b.tw };
+        return o;
+      });
+  }
+  // the ring, as four butted runs — the two rails run full width, the stiles fit between.
+  // On an out-of-square wall each run is clipped to the leaning edge like any other piece.
+  function frameRuns(f, eg, bd) {
+    var t = f.src.tw, i = f.inner;
+    var runs = [
+      { x: f.x, y: f.y, w: f.w, h: t },
+      { x: f.x, y: f.y + f.h - t, w: f.w, h: t },
+      { x: f.x, y: i.y, w: t, h: i.h },
+      { x: f.x + f.w - t, y: i.y, w: t, h: i.h }
+    ], out = [];
+    runs.forEach(function (r) {
+      if (bd) {   // the ring lives inside the trim insets like every other piece of tile
+        var cx0 = Math.max(r.x, bd.x0), cy0 = Math.max(r.y, bd.y0);
+        var cx1 = Math.min(r.x + r.w, bd.x1), cy1 = Math.min(r.y + r.h, bd.y1);
+        if (cx1 - cx0 < MIN_W || cy1 - cy0 < MIN_W) return;
+        r = { x: cx0, y: cy0, w: cx1 - cx0, h: cy1 - cy0 };
+      }
+      if (!eg) { out.push({ x: r.x, y: r.y, w: r.w, h: r.h, role: 'border', fullW: false, fullH: false, band: true }); return; }
+      var pg = clipToPoly(rectPoly(r), [{ x: 0, y: r.y }, { x: Math.max(0, eg(r.y)), y: r.y },
+                                        { x: Math.max(0, eg(r.y + r.h)), y: r.y + r.h }, { x: 0, y: r.y + r.h }]);
+      if (pg.length > 2) {
+        var pa = polyArea2(pg);
+        if (pa <= HEX_MIN) return;
+        var bb = polyBBox(pg);
+        if (Math.abs(pa - r.w * r.h) < 1e-6) out.push({ x: r.x, y: r.y, w: r.w, h: r.h, role: 'border', fullW: false, fullH: false, band: true });
+        else out.push({ x: bb.x0, y: bb.y0, w: bb.x1 - bb.x0, h: bb.y1 - bb.y0, poly: pg, area: pa,
+                        role: 'border', shaped: true, fullW: false, fullH: false, band: true });
+      }
+    });
+    return out;
+  }
+  /* Cut the frames out of whatever the field produced, then hand back the ring pieces and
+     the panel tiles. Runs AFTER niches so a niche inside a framed panel still wins. */
+  function applyFrames(tiles, frames, acc, eg, bd, nBoxes) {
+    // a box that collides with a niche opening is not buildable — you'd be running a
+    // mitred border into a hole. The engine declines it (the field lays as if the box
+    // weren't there) and the box card carries the warning. No phantom geometry.
+    if (frames && nBoxes && nBoxes.length) frames = frames.filter(function (f) {
+      return !nBoxes.some(function (nb) {
+        return f.x < nb.x + nb.w && f.x + f.w > nb.x && f.y < nb.y + nb.h && f.y + f.h > nb.y;
+      });
+    });
+    if (!frames || !frames.length) return { tiles: tiles, runs: [] };
+    var outer = frames.map(function (f) { return { x: f.x, y: f.y, w: f.w, h: f.h }; });
+    // niche back panels sit in the opening, recessed — the frame happens on the wall
+    // plane and never touches them. The ring is cut around the openings instead.
+    var backs = [], plane = [];
+    tiles.forEach(function (t) { (t.role === 'niche back' ? backs : plane).push(t); });
+    var sp = subtractNiches(plane, outer, null, acc, true);   // the ring paves what falls inside
+    var runs = [], panel = [];
+    frames.forEach(function (f) {
+      runs = runs.concat(frameRuns(f, eg, bd));
+      sp.interior.forEach(function (t) {
+        if (t.poly) {                       // hex and diagonal come back as shapes, not rects
+          var cp = clipToRect(t.poly, f.inner.x, f.inner.y, f.inner.x + f.inner.w, f.inner.y + f.inner.h);
+          if (cp.length > 2) {
+            var pa = polyArea2(cp);
+            if (pa > HEX_MIN) {
+              var bb = polyBBox(cp);
+              panel.push({ x: bb.x0, y: bb.y0, w: bb.x1 - bb.x0, h: bb.y1 - bb.y0, poly: cp, area: pa,
+                role: 'panel', hex: !!t.hex, shaped: !t.hex, fullW: false, fullH: false });
+            } else if (acc) acc.dropped += pa;
+          }
+          return;
+        }
+        var c = clipRect({ x: t.x, y: t.y, w: t.w, h: t.h }, f.inner);
+        if (c) panel.push({ x: c.x, y: c.y, w: c.w, h: c.h, role: 'panel',
+          fullW: c.w >= t.w - 0.02, fullH: c.h >= t.h - 0.02 });
+      });
+    });
+    return { tiles: sp.field.concat(backs).concat(panel), runs: runs };
+  }
   function applyNiches(tiles, boxes) {
     if (!boxes.length) return tiles;
     var out = [];
     tiles.forEach(function (t) {
       var hit = boxes.filter(function (b) { return clipRect(t, b); });
       if (!hit.length) { out.push(t); return; }
-      var parts = [{ x: t.x, y: t.y, w: t.w, h: t.h }];
+      // a piece that survived an earlier subtraction may already BE parts (an L around a
+      // niche corner) — starting from its bounding box would resurrect the material the
+      // first cut removed. Seed from what the piece actually is.
+      var parts = t.parts ? t.parts.map(function (q) { return { x: q.x, y: q.y, w: q.w, h: q.h }; })
+                          : [{ x: t.x, y: t.y, w: t.w, h: t.h }];
       hit.forEach(function (b) { var nx = []; parts.forEach(function (p) { subRect(p, b, nx); }); parts = nx; });
       if (!parts.length) return;                                   // tile sits wholly in the opening
       if (parts.length === 1) {                                    // still a rectangle → an ordinary cut
@@ -3360,9 +3781,13 @@ window.TBstate = {
               : (pat === 'hex') ? hexTiles(s.w, s.h, Math.min(tw, th), grout, shJ)
               : (pat === 'diagonal') ? diagonal2D(s.w, s.h, tw, th, grout, shJ)
               : (pat === 'basket') ? basket2D(s.w, s.h, tw, th, grout, shJ)
-              : (GRID[pat] ? fieldTiles(s.w, s.h, tw, th, grout, mode, pat, s.trim, s.bands, s.wTop) : null);
+              : (GRID[pat] ? fieldTiles(s.w, s.h, tw, th, grout, mode, pat, s.trim, s.bands, s.wTop, null, s.vmode) : null);
       if (!raw) return;
       raw = raw.concat(bandTiles(s.w, s.h, grout, s.trim, s.bands, s.wTop));
+      var egJ = edgeFn(s.w, s.h, s.wTop, s.trim), tiJ = trimIn(s.trim);
+      var jf = applyFrames(raw, boxFrames(s.boxes, s.h), null, egJ,
+        { x0: tiJ.l, y0: tiJ.t, x1: egJ ? Infinity : s.w - tiJ.r, y1: s.h - tiJ.b }, bx);
+      raw = jf.tiles.concat(jf.runs);
       var bx = nicheBoxes(s.niches, s.h), inner = [];
       bx.forEach(function (b) {
         raw.forEach(function (t) {
@@ -3462,22 +3887,27 @@ window.TBstate = {
       return;
     }
     svg.style.display = 'block';
-    var raw = fieldTiles(W, H, tw, th, grout, mode, pat, T.trim, T.bands, T.wTop);
+    var raw = fieldTiles(W, H, tw, th, grout, mode, pat, T.trim, T.bands, T.wTop, null, T.vmode);
     var bandsT = bandTiles(W, H, grout, T.trim, T.bands, T.wTop);
     var boxes = nicheBoxes(T.niches, H);
     // the inside of a niche continues the wall's own grid — which is why landing the
     // opening on grout lines makes the interior come out in full tiles
     var split = subtractNiches(raw.concat(bandsT), boxes);
-    var tiles = split.field.concat(split.interior);
+    var frames = boxFrames(T.boxes, H);
+    var egP = edgeFn(W, H, T.wTop, T.trim), tiP = trimIn(T.trim);
+    var fr = applyFrames(split.field.concat(split.interior), frames, null, egP,
+      { x0: tiP.l, y0: tiP.t, x1: egP ? Infinity : W - tiP.r, y1: H - tiP.b }, boxes);
+    var tiles = fr.tiles.concat(fr.runs);
     annotate(tiles, T.holes, H);
     var cuts = buildCuts(tiles, tw, th);
     draw(tiles, W, H, grout, tile, cuts, boxes, T.trim);
     cutlist(cuts, tile, tiles.length);
     var tr = trimIn(T.trim), anyTrim = tr.l || tr.r || tr.t || tr.b;
-    noteEl.textContent = (pat === 'sheet' ? toDim(tw) + ' × ' + toDim(th) + ' sheets — the numbers below are SHEET cuts; trim the mesh between pieces, don\'t cut through them. ' : toDim(tw) + ' × ' + toDim(th) + ' tile. ') + 'cuts in blue, slivers (≤2″) in red — a full one lands at the bottom, cuts ride the top. ' + toDim(grout) + ' grout.' +
+    noteEl.textContent = (pat === 'sheet' ? toDim(tw) + ' × ' + toDim(th) + ' sheets — the numbers below are SHEET cuts; trim the mesh between pieces, don\'t cut through them. ' : toDim(tw) + ' × ' + toDim(th) + ' tile. ') + 'cuts in blue, slivers (≤2″) in red. ' + ({ cutbot: 'Bottom course is the scribe cut; full courses run up off the ledger line. ', vbal: 'The cut is split evenly top and bottom. ', fullbot: 'Full course at the bottom, cut rides the top. ' }[T.vmode] || 'Full course at the bottom, cut rides the top. ') + toDim(grout) + ' grout.' +
       (boxes.length ? ' The niche opening is outlined; the tile inside it is the back panel.' : '') +
       (anyTrim ? ' The hatched edge is trim — the field re-centres inside it.' : '') +
-      (bandsT.length ? ' The band is set off on its own; courses above it start fresh off its top.' : '');
+      (bandsT.length ? ' The band is set off on its own; courses above it start fresh off its top.' : '') +
+      (frames.length ? ' The box border is its own ring; the panel inside continues the field grid, so the joints line through the frame.' : '');
   }
 
   if (cutEl) cutEl.addEventListener('click', function (e) {
@@ -3497,9 +3927,21 @@ window.TBstate = {
     buildCuts: buildCuts, classify: classify, clipRect: clipRect, polyArea2: polyArea2,
     keyOf: keyOf, sizeOf: sizeOf, isCut: function (t) { return !(t.fullW && t.fullH) || !!t.holes || !!t.niched; },
     GRID: GRID, SLIVER: SLIVER, HEX_MIN: HEX_MIN, MIN_W: MIN_W,
+    /* The vertical-start buttons have to print the cut you're actually going to make. They
+       ask the engine for it rather than keeping a second copy of the arithmetic — a private
+       copy is how the pattern picker drifted out of sync and under-ordered a job. */
+    bottomCut: function (o) {
+      var F = fieldRegions(o.W, o.H, o.trim, o.bands);
+      if (!F.segs.length) return null;
+      var s = F.segs[0], th = o.th, g = o.grout;
+      var B = vAnchor(s[0], s[1], th, g, o.vmode);
+      return Math.min(th, s[1] - (B - th));
+    },
     // the exact composition render() uses, so the test checks the real thing
     compose: function (o) {
       var W = o.W, H = o.H, tw = o.tw, th = o.th, grout = o.grout, mode = o.mode || 'tile', pat = o.pat || 'straight';
+      // vmode is deliberately NOT defaulted here — undefined means the old flush-bottom grid,
+      // which keeps every caller that never opts in byte-identical to before
       var rects = fieldShapes(W, H, o.trim, o.bands, o.wTop);
       var boxes = nicheBoxes(o.niches, H);
       var bands = bandTiles(W, H, grout, o.trim, o.bands, o.wTop);
@@ -3517,10 +3959,14 @@ window.TBstate = {
         var sh = subtractNiches(raw, boxes, null, acc);
         tiles = sh.field.concat(sh.interior);
       } else {
-        raw = fieldTiles(W, H, tw, th, grout, mode, pat, o.trim, o.bands, o.wTop, acc);
+        raw = fieldTiles(W, H, tw, th, grout, mode, pat, o.trim, o.bands, o.wTop, acc, o.vmode);
         var sg = subtractNiches(raw.concat(bands), boxes, null, acc);
         tiles = sg.field.concat(sg.interior);
       }
+      var eg0 = edgeFn(W, H, o.wTop, o.trim), ti0 = trimIn(o.trim);
+      var fr = applyFrames(tiles, boxFrames(o.boxes, H), acc, eg0,
+        { x0: ti0.l, y0: ti0.t, x1: eg0 ? Infinity : W - ti0.r, y1: H - ti0.b }, boxes);
+      tiles = fr.tiles.concat(fr.runs);
       annotate(tiles, o.holes, H);
       return { tiles: tiles, cuts: buildCuts(tiles, tw, th), rects: rects.rects, shapes: rects,
                boxes: boxes, dropped: acc.dropped };
@@ -4905,6 +5351,8 @@ window.TBstate = {
 
   var PATS = ['straight', 'brick', 'thirds', 'vertical', 'sheet', 'herring', 'hex', 'diagonal', 'basket'];
   var MODES = ['tile', 'joint', 'left'];
+  // null included on purpose — the old flush-bottom grid has to keep passing too
+  var VMODES = [null, 'fullbot', 'cutbot', 'vbal'];
   function rnd(seed) { var x = Math.sin(seed) * 10000; return x - Math.floor(x); }
 
   function build(n) {
@@ -4918,6 +5366,7 @@ window.TBstate = {
         tw: tw, th: th,
         grout: [0.0625, 0.125, 0.1875, 0.25][Math.floor(r(5) * 4)],
         mode: MODES[Math.floor(r(6) * 3)],
+        vmode: VMODES[Math.floor(r(31) * VMODES.length)],
         pat: PATS[Math.floor(r(7) * PATS.length)],
         trim: null, bands: [], niches: [], holes: []
       };
@@ -4927,6 +5376,13 @@ window.TBstate = {
       if (r(18) < 0.35) cfg.niches = [{ t: 'N', x: Math.floor(r(19) * cfg.W * 0.5) + 4, y: Math.floor(r(20) * cfg.H * 0.5) + 6,
         w: 8 + Math.floor(r(21) * 12), h: 8 + Math.floor(r(22) * 12), d: 3.5 }];
       if (r(23) < 0.35) cfg.holes = [{ t: 'Valve', x: r(24) * cfg.W, y: r(25) * cfg.H, d: [1.25, 2.5, 4.5][Math.floor(r(26) * 3)] }];
+      // framed box panels — the ring + panel must conserve area like everything else
+      cfg.boxes = [];
+      if (r(32) < 0.35 && cfg.W > 30 && cfg.H > 30) {
+        var bt = [1, 2, 3][Math.floor(r(33) * 3)];
+        var bw = Math.max(bt * 2 + 6, Math.floor(r(34) * cfg.W * 0.5)), bh = Math.max(bt * 2 + 6, Math.floor(r(35) * cfg.H * 0.5));
+        cfg.boxes.push({ t: 'Box', x: Math.floor(r(36) * (cfg.W - bw)), y: Math.floor(r(37) * (cfg.H - bh)), w: bw, h: bh, tw: bt });
+      }
       // every pattern follows the lean now, so throw out-of-square walls at all of them
       if (r(27) < 0.3) cfg.wTop = cfg.W + (r(28) - 0.5) * Math.min(6, cfg.W * 0.12);
       out.push(cfg);
