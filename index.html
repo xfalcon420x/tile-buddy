@@ -716,7 +716,7 @@
         <div class="dgm" data-dgm="size"></div>
       </div>
       <div class="field">
-        <p class="label">Width at the top <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-faint)">(walls are rarely square)</span></p>
+        <p class="label" id="lbl-wtop">Width at the top <span class="lbl-soft" style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-faint)">(walls are rarely square)</span></p>
         <div class="row">
           <input type="number" id="wtop" step="0.125" min="0" inputmode="decimal" placeholder="same" aria-label="Width measured at the top">
           <span class="unit unit-label">in</span>
@@ -1575,12 +1575,12 @@ window.TBstate = {
   function squareReport() {
     var a = A(), el = document.getElementById('sq-report');
     if (!el) return;
-    var base = 'Leave it blank if the wall is square. Any difference and the pieces down that edge become <b>scribe cuts</b> — the app gives you both ends of each one.';
+    var base = 'Measure at both ' + (isFloor() ? 'edges' : 'ends') + ' — leave this blank if they match. Any difference and the pieces down that edge become <b>scribe cuts</b> — the app gives you both ends of each one.';
     if (!a.wTop || Math.abs(a.wTop - a.w) < 1 / 32) { el.innerHTML = base; el.style.color = ''; return; }
     var d = a.wTop - a.w, pat = (window.TB && window.TB.pattern) || 'straight';
     var modelled = true;                       // every pattern follows the lean now
-    el.innerHTML = '<b>Out of square by ' + toDim(Math.abs(d)) + '</b> — ' + toDim(Math.abs(d) / a.h * 12) + ' per foot of height, leaning ' +
-      (d > 0 ? 'wider at the top' : 'wider at the bottom') + '. ' +
+    el.innerHTML = '<b>Out of square by ' + toDim(Math.abs(d)) + '</b> — ' + toDim(Math.abs(d) / a.h * 12) + (isFloor() ? ' per foot of depth, ' : ' per foot of height, ') +
+      (isFloor() ? (d > 0 ? 'wider at the far edge' : 'wider at the near edge') : (d > 0 ? 'wider at the top' : 'wider at the bottom')) + '. ' +
       (modelled
         ? 'Every piece down the right-hand edge is cut as a <b>scribe</b>, and the list gives both ends. Anything left over under 1/4″ opens up the joint rather than becoming a strip you could never set.'
         : '<b>This pattern is laid out square.</b> Herringbone and hex don\'t taper here yet — treat the right-hand edge as a scribe and measure each piece at the wall.');
@@ -1616,8 +1616,14 @@ window.TBstate = {
   function loadActive() {
     var a = A();
     showSize();
-    document.getElementById('lbl-width').textContent = 'Width';
+    // the first width IS the bottom tape run — if the form doesn't say so, "width at
+    // the top" reads like the only place anyone measured (Falcon, 2026-08-13)
+    document.getElementById('lbl-width').textContent = isFloor() ? 'Width — at the near edge' : 'Width — at the bottom';
     document.getElementById('lbl-height').textContent = isFloor() ? 'Depth' : 'Height';
+    var lw = document.getElementById('lbl-wtop');
+    if (lw) lw.innerHTML = (isFloor() ? 'Width — at the far edge' : 'Width — at the top') +
+      ' <span class="lbl-soft" style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-faint)">(' +
+      (isFloor() ? 'rooms are rarely square' : 'walls are rarely square') + ')</span>';
     document.getElementById('active-label').innerHTML = a.t + ' &middot; size';
     var sn = document.getElementById('sect-surface-name');
     if (sn) sn.textContent = a.t + (isFloor() ? ' — a floor' : /curb/i.test(a.t) ? ' — a curb face' : ' — a wall');
