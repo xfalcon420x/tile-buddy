@@ -942,6 +942,13 @@
     <div class="card">
       <p class="label">The floor <span class="hint">your real outline, tiled</span></p>
       <svg class="map-svg" id="map-svg" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+      <div class="trim-row" style="margin-top:0"><span class="pv-lbl">Count this room in the job</span>
+        <div class="seg" id="room-use">
+          <button type="button" data-u="yes" aria-pressed="false">Yes</button>
+          <button type="button" data-u="no" aria-pressed="true">Map only</button>
+        </div>
+      </div>
+      <div id="room-use-note" class="trim-report"></div>
       <div class="map-stats">
         <div class="map-stat"><div class="num" id="map-area">—</div><div class="cap area-label">sq ft</div></div>
         <div class="map-stat"><div class="num" id="map-full">—</div><div class="cap">Full tiles</div></div>
@@ -1501,30 +1508,8 @@ window.TBstate = {
     });
   })();
   // a unit switch changes nothing about the job — only how it reads
-  (function () {
-    var seg = document.getElementById('map-mode');
-    if (!seg) return;
-    seg.querySelectorAll('button').forEach(function (b) {
-      b.addEventListener('click', function () {
-        state.mode = b.dataset.m;
-        seg.querySelectorAll('button').forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
-        document.getElementById('map-boxes-ui').hidden = state.mode !== 'boxes';
-        document.getElementById('map-walls-ui').hidden = state.mode === 'boxes';
-        doneCuts = {}; activeCut = null;
-        sync();
-      });
-    });
-    [['room-w', 'w'], ['room-d', 'd']].forEach(function (pair) {
-      var el = document.getElementById(pair[0]);
-      if (el) el.addEventListener('input', function () { state.main[pair[1]] = window.TBU.toIn(parseFloat(el.value) || 0); sync(); });
-    });
-  })();
-  function showMain() {
-    var a = document.getElementById('room-w'), b = document.getElementById('room-d');
-    if (a) a.value = window.TBU.num(state.main.w);
-    if (b) b.value = window.TBU.num(state.main.d);
-  }
   window.addEventListener('tb-units', function () { showSize(); showTile(); renderSurfList(); renderHoles(); renderNiches(); renderTrim(); renderBands(); renderHeat(); sync(); });
+  window.addEventListener('tb-room', function () { renderHeat(); });
 
   // ---- job type + surfaces list ----
   var JOB_LABELS = [['shower', 'Shower'], ['floor', 'Floor'], ['backsplash', 'Backsplash'], ['fireplace', 'Fireplace'], ['custom', 'Custom']];
@@ -1909,7 +1894,13 @@ window.TBstate = {
     var el = document.getElementById('heat-report');
     if (!el) return;
     var h = heatOf(), a = A();
-    var inner = Math.max(0, a.w - 2 * h.setback) * Math.max(0, a.h - 2 * h.setback) / 144;
+    /* Insetting a rectilinear outline by s takes off perimeter×s and gives back 4s²
+       (its convex corners always outnumber its concave ones by exactly four) — which
+       is exact for a rectangle too, so one formula covers a mapped L-shaped room. */
+    var RM = window.TBROOM, useRoom = RM && RM.on && RM.areaSqFt > 0 && /floor|pan/i.test(a.t);
+    var inner = useRoom
+      ? Math.max(0, RM.areaSqIn - RM.perimeter * h.setback + 4 * h.setback * h.setback) / 144
+      : Math.max(0, a.w - 2 * h.setback) * Math.max(0, a.h - 2 * h.setback) / 144;
     var ex = 0; h.excl.forEach(function (x) { ex += (x.w * x.d) / 144; });
     var heatable = Math.max(0, inner - ex);
     var mat = 0;
@@ -1918,13 +1909,13 @@ window.TBstate = {
     // floor heat runs for hours, so it is a continuous load: a 15 A thermostat/circuit
     // is only good for 12 A of it. Sizing to the raw 15 would be over the code limit.
     var stats = Math.max(1, Math.ceil(amps / 12));
-    var gross = (a.w * a.h) / 144;
+    var gross = useRoom ? RM.areaSqFt : (a.w * a.h) / 144;
     if (!(heatable > 0)) {
       el.innerHTML = '<span style="color:var(--warn)">Nothing left to heat once the setback and the fixtures come out. Shrink the setback or the exclusions.</span>';
       return;
     }
     el.innerHTML =
-      'Floor is <b>' + gross.toFixed(1) + ' sq ft</b>; inside a ' + toDim(h.setback) + ' setback and minus what sits on it, <b>' +
+      (useRoom ? 'Using the <b>mapped room</b> — ' : '') + 'Floor is <b>' + gross.toFixed(1) + ' sq ft</b>; inside a ' + toDim(h.setback) + ' setback and minus what sits on it, <b>' +
       heatable.toFixed(1) + ' sq ft</b> can take heat.<br>' +
       (mat ? 'Order the <b>' + mat + ' sq ft</b> mat — the largest standard size that fits. ' +
         '<b>' + watts + ' W</b> at ' + h.wpsf + ' W/sq ft, <b>' + amps.toFixed(1) + ' A</b> on ' + h.volts + 'V' +
@@ -2053,7 +2044,13 @@ window.TBstate = {
     var el = document.getElementById('heat-report');
     if (!el) return;
     var h = heatOf(), a = A();
-    var inner = Math.max(0, a.w - 2 * h.setback) * Math.max(0, a.h - 2 * h.setback) / 144;
+    /* Insetting a rectilinear outline by s takes off perimeter×s and gives back 4s²
+       (its convex corners always outnumber its concave ones by exactly four) — which
+       is exact for a rectangle too, so one formula covers a mapped L-shaped room. */
+    var RM = window.TBROOM, useRoom = RM && RM.on && RM.areaSqFt > 0 && /floor|pan/i.test(a.t);
+    var inner = useRoom
+      ? Math.max(0, RM.areaSqIn - RM.perimeter * h.setback + 4 * h.setback * h.setback) / 144
+      : Math.max(0, a.w - 2 * h.setback) * Math.max(0, a.h - 2 * h.setback) / 144;
     var ex = 0; h.excl.forEach(function (x) { ex += (x.w * x.d) / 144; });
     var heatable = Math.max(0, inner - ex);
     var mat = 0;
@@ -2062,13 +2059,13 @@ window.TBstate = {
     // floor heat runs for hours, so it is a continuous load: a 15 A thermostat/circuit
     // is only good for 12 A of it. Sizing to the raw 15 would be over the code limit.
     var stats = Math.max(1, Math.ceil(amps / 12));
-    var gross = (a.w * a.h) / 144;
+    var gross = useRoom ? RM.areaSqFt : (a.w * a.h) / 144;
     if (!(heatable > 0)) {
       el.innerHTML = '<span style="color:var(--warn)">Nothing left to heat once the setback and the fixtures come out. Shrink the setback or the exclusions.</span>';
       return;
     }
     el.innerHTML =
-      'Floor is <b>' + gross.toFixed(1) + ' sq ft</b>; inside a ' + toDim(h.setback) + ' setback and minus what sits on it, <b>' +
+      (useRoom ? 'Using the <b>mapped room</b> — ' : '') + 'Floor is <b>' + gross.toFixed(1) + ' sq ft</b>; inside a ' + toDim(h.setback) + ' setback and minus what sits on it, <b>' +
       heatable.toFixed(1) + ' sq ft</b> can take heat.<br>' +
       (mat ? 'Order the <b>' + mat + ' sq ft</b> mat — the largest standard size that fits. ' +
         '<b>' + watts + ' W</b> at ' + h.wpsf + ' W/sq ft, <b>' + amps.toFixed(1) + ' A</b> on ' + h.volts + 'V' +
@@ -2144,16 +2141,21 @@ window.TBstate = {
   function sqft(s) { return (s.w * s.h) / 144; }
 
   function jobSurfaces() {
-    return ((window.TB || {}).surfaces || []).filter(function (s) { return s.w > 0 && s.h > 0; });
+    var out = ((window.TB || {}).surfaces || []).filter(function (s) { return s.w > 0 && s.h > 0; })
+      .map(function (s) { return { type: s.type, w: s.w, h: s.h, area: s.w * s.h / 144 }; });
+    var R = window.TBROOM;
+    if (R && R.on && R.areaSqFt > 0)
+      out.push({ type: 'Mapped room', w: 0, h: 0, area: R.areaSqFt, perim: R.perimeter, mapped: true });
+    return out;
   }
   function renderJobSurfaces() {
     var el = document.getElementById('job-surfaces');
     if (!el) return;
     var js = jobSurfaces(), U = window.TBU;
     if (!js.length) { el.innerHTML = '<span class="muted">Nothing laid out yet — start on the Layout tab.</span>'; return; }
-    var tot = js.reduce(function (a, s) { return a + s.w * s.h / 144; }, 0);
+    var tot = js.reduce(function (a, s) { return a + s.area; }, 0);
     el.innerHTML = js.map(function (s) {
-      return '<b>' + s.type + '</b> ' + U.numStr(s.w) + ' × ' + U.numStr(s.h);
+      return '<b>' + s.type + '</b> ' + (s.mapped ? s.area.toFixed(1) + ' sq ft' : U.numStr(s.w) + ' × ' + U.numStr(s.h));
     }).join(' · ') + ' — <b>' + (U.metric() ? (tot * 0.092903).toFixed(2) + ' m²' : tot.toFixed(1) + ' sq ft') + '</b>';
   }
   function renderSurfaces() {
@@ -2201,12 +2203,14 @@ window.TBstate = {
       '. <span class="muted">Change it on the Layout tab.</span>';
   }
   window.addEventListener('tb-change', function () { renderPatterns(); renderJobSurfaces(); compute(); });
+  window.addEventListener('tb-room', function () { renderJobSurfaces(); compute(); });
   /* Waterproofing quantities come OUT of the job rather than being asked for again:
      wall and floor areas, the corners where planes meet, and one seal per penetration. */
   function split() {
     var wall = 0, floor = 0, floorPerim = 0, walls = 0, maxH = 0;
     jobSurfaces().forEach(function (s) {
-      var a = (s.w * s.h) / 144;
+      var a = s.area;
+      if (s.mapped) { floor += a; floorPerim += (s.perim || 0) / 12; return; }
       if (/floor|pan|threshold|hearth/i.test(s.type)) { floor += a; floorPerim += 2 * (s.w + s.h) / 12; }
       else { wall += a; walls++; if (s.h > maxH) maxH = s.h; }
     });
@@ -2284,7 +2288,7 @@ window.TBstate = {
 
   function netArea() {
     var a = 0;
-    jobSurfaces().forEach(function (s) { a += (s.w * s.h) / 144; });
+    jobSurfaces().forEach(function (s) { a += s.area; });
     state.surfaces.forEach(function (s) { a += (s.sub ? -1 : 1) * sqft(s); });
     return Math.max(0, a);
   }
@@ -2386,29 +2390,6 @@ window.TBstate = {
     renderSurfaces(); renderPatterns(); compute();
   });
 
-  (function () {
-    var seg = document.getElementById('map-mode');
-    if (!seg) return;
-    seg.querySelectorAll('button').forEach(function (b) {
-      b.addEventListener('click', function () {
-        state.mode = b.dataset.m;
-        seg.querySelectorAll('button').forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
-        document.getElementById('map-boxes-ui').hidden = state.mode !== 'boxes';
-        document.getElementById('map-walls-ui').hidden = state.mode === 'boxes';
-        doneCuts = {}; activeCut = null;
-        sync();
-      });
-    });
-    [['room-w', 'w'], ['room-d', 'd']].forEach(function (pair) {
-      var el = document.getElementById(pair[0]);
-      if (el) el.addEventListener('input', function () { state.main[pair[1]] = window.TBU.toIn(parseFloat(el.value) || 0); sync(); });
-    });
-  })();
-  function showMain() {
-    var a = document.getElementById('room-w'), b = document.getElementById('room-d');
-    if (a) a.value = window.TBU.num(state.main.w);
-    if (b) b.value = window.TBU.num(state.main.d);
-  }
   window.addEventListener('tb-units', function () {
     document.querySelectorAll('.area-label').forEach(function (el) { el.textContent = window.TBU.areaLabel(); });
     renderSurfaces(); compute();
@@ -3399,6 +3380,10 @@ window.TBstate = {
       });
     });
     if (!measured) { el.innerHTML = '<div class="cutrow"><span class="dim">This pattern lays at an angle — per-surface counts only for now.</span></div>'; return; }
+    var RM = window.TBROOM;
+    if (RM && RM.on && RM.tiles > 0) {
+      agg.total += RM.tiles; agg.full += RM.full; agg.cut += RM.cuts;
+    }
     var h = '<div class="cutrow total"><span class="k">Total tiles — whole job</span><span class="cnt">' + agg.total + '</span></div>';
     h += '<div class="cutrow full"><span class="k">Full</span><span class="cnt">' + agg.full + '</span></div>';
     if (agg.half) h += '<div class="cutrow half"><span class="k">Half</span><span class="cnt">' + agg.half + '</span></div>';
@@ -3406,6 +3391,7 @@ window.TBstate = {
     if (agg.cut) h += '<div class="cutrow cut"><span class="k">Other cuts</span><span class="cnt">' + agg.cut + '</span></div>';
     if (agg.sliver) h += '<div class="cutrow sliver"><span class="k">Slivers</span><span class="cnt">' + agg.sliver + ' ⚠</span></div>';
     if (agg.holes) h += '<div class="cutrow cut"><span class="k">Tiles with holes</span><span class="cnt">' + agg.holes + '</span></div>';
+    if (RM && RM.on && RM.tiles > 0) h += '<div class="cutrow"><span class="dim">includes the mapped room — ' + RM.tiles + ' tiles</span><span class="cnt"></span></div>';
     el.innerHTML = h;
   }
 
@@ -3553,6 +3539,7 @@ window.TBstate = {
   }
 
   window.addEventListener('tb-change', render);
+  window.addEventListener('tb-room', function () { jobTotal(); });
   window.addEventListener('resize', render);
   render();
 })();
@@ -3867,7 +3854,7 @@ window.TBstate = {
   };
   function seed(k) { return PRESETS[k].map(function (s) { return { dir: s[0], len: s[1], ang: 0 }; }); }
   var state = { mode: 'boxes', origin: 'center', nx: 0, ny: 0, preset: 'L', segs: seed('L'),
-                main: { w: 144, d: 120 }, boxes: [], sel: -1 };
+                main: { w: 144, d: 120 }, boxes: [], sel: -1, use: false };
   /* A room is a rectangle with things stuck on or cut out of it — a closet, a bump-out,
      a chase in the corner. That is how people describe rooms, and it is exact: every box
      carries its own numbers, so nothing compounds the way a walked traverse does. */
@@ -4315,6 +4302,36 @@ window.TBstate = {
     else { statusEl.className = 'map-status gap'; statusEl.innerHTML = '<span>⚠</span><span>Off by <b>' + fmtLen(g) + '</b> — the last wall doesn\'t land back at the start. Fix a length, or tap <b>Close the loop</b>.</span>'; }
   }
 
+  /* The mapped room used to be an island: a perfect cut list that the order list and
+     the job total knew nothing about. It can now be counted in — but only when you say
+     so, because a job that already has a rectangular floor would otherwise be counted
+     twice without a word. */
+  function publishRoom(R) {
+    var poly = room();
+    var per = 0;
+    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++)
+      per += Math.hypot(poly[i].x - poly[j].x, poly[i].y - poly[j].y);
+    window.TBROOM = { on: !!state.use, areaSqFt: R ? R.area : 0, areaSqIn: R ? R.area * 144 : 0,
+      perimeter: per, tiles: R ? (R.full + R.cuts) : 0, full: R ? R.full : 0, cuts: R ? R.cuts : 0,
+      corners: poly.length };
+    window.dispatchEvent(new Event('tb-room'));
+    roomUseNote();
+  }
+  function roomUseNote() {
+    var el = document.getElementById('room-use-note');
+    if (!el) return;
+    var R = window.TBROOM || {}, floors = ((window.TB || {}).surfaces || [])
+      .filter(function (s) { return /floor|pan/i.test(s.type) && s.w > 0 && s.h > 0; });
+    if (!state.use) {
+      el.innerHTML = '<span class="muted">This room is a layout only. Its area and tile are <b>not</b> in the order list or the whole-job total.</span>';
+      return;
+    }
+    el.innerHTML = 'Counted in — <b>' + (R.areaSqFt || 0).toFixed(1) + ' sq ft</b> and <b>' + (R.tiles || 0) +
+      '</b> tiles are now in the order list and the job total.' +
+      (floors.length ? '<br><span style="color:var(--warn)">⚠ The job on the Layout tab also has ' +
+        floors.map(function (f) { return f.type; }).join(' and ') +
+        '. If that IS this room, remove it there or you are counting the floor twice.</span>' : '');
+  }
   function sync() {
     status();
     var R = layTile();
@@ -4332,6 +4349,7 @@ window.TBstate = {
     cutlist(R);
     A.textContent = window.TBU.metric() ? (R.area * 0.092903).toFixed(1) : R.area.toFixed(0);
     F.textContent = R.full; C.textContent = R.cuts;
+    publishRoom(R);
     var T = window.TB || {};
     noteEl.textContent = 'Tile, grout and pattern come from the Layout tab — ' + toDim(R.tw) + ' × ' + toDim(R.th) + ' ' +
       ({ straight: 'straight', brick: 'running bond', thirds: 'third bond', herring: 'herringbone' }[R.pat] || R.pat) +
@@ -4353,6 +4371,17 @@ window.TBstate = {
     state.segs.push(named ? { dir: named[0], len: L, ang: 0 } : { dir: 'A', len: L, ang: ang });
     state.preset = null; renderPresets(); renderSegs(); sync();
   });
+  (function () {
+    var seg = document.getElementById('room-use');
+    if (seg) seg.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        state.use = b.dataset.u === 'yes';
+        seg.querySelectorAll('button').forEach(function (o) { o.setAttribute('aria-pressed', o === b ? 'true' : 'false'); });
+        sync();
+      });
+    });
+  })();
+  window.addEventListener('tb-change', roomUseNote);
   (function () {
     var seg = document.getElementById('map-mode');
     if (!seg) return;
@@ -4401,14 +4430,16 @@ window.TBstate = {
   });
 
   window.TBstate.register('map', function () {
-    return { origin: state.origin, nx: state.nx, ny: state.ny, preset: state.preset, mode: state.mode,
+    return { origin: state.origin, nx: state.nx, ny: state.ny, preset: state.preset, mode: state.mode, use: state.use,
              main: { w: state.main.w, d: state.main.d }, boxes: JSON.parse(JSON.stringify(state.boxes)),
              segs: JSON.parse(JSON.stringify(state.segs)) };
   }, function (v) {
     if (!v) return;
     state.origin = v.origin || 'center'; state.nx = v.nx || 0; state.ny = v.ny || 0;
     state.preset = v.preset; state.segs = v.segs || seed('L'); doneCuts = {}; activeCut = null;
-    state.mode = v.mode || 'walls';
+    state.mode = v.mode || 'walls'; state.use = !!v.use;
+    var ru = document.getElementById('room-use');
+    if (ru) ru.querySelectorAll('button').forEach(function (o) { o.setAttribute('aria-pressed', (o.dataset.u === 'yes') === state.use ? 'true' : 'false'); });
     if (v.main) state.main = { w: v.main.w, d: v.main.d };
     state.boxes = v.boxes || [];
     var seg2 = document.getElementById('map-mode');
