@@ -178,6 +178,9 @@
   #tile-swap { padding: 10px 12px; font-size: 1.05rem; line-height: 1; border-style: solid; }
   .map-head, .map-row { display: grid; grid-template-columns: 22px 88px 1fr 26px; gap: 6px; align-items: center; }
   .map-start { font-size: .78rem; color: var(--ink-soft); padding-left: 2px; }
+  .map-cta { font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; padding: 5px 10px; margin: 2px 0;
+             border-radius: 7px; background: var(--chalk); border: none; color: #fff; }
+  .map-cta:hover { background: var(--chalk-deep); }
   .map-start b { color: var(--chalk-deep); }
   .map-head { font-size: .64rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); font-weight: 600; margin: 14px 0 6px; padding: 0 2px; }
   .map-row { margin-bottom: 6px; }
@@ -4818,6 +4821,13 @@ window.TBstate = {
         });
       });
       row.querySelector('input').addEventListener('input', function (e) { s.len = fromUnit(parseFloat(e.target.value) || 0); state.preset = null; sync(); });
+      // Enter = "next wall": mid-list it hops down a row, on the last row it adds one —
+      // so a whole room goes in as  length ⏎ length ⏎ length ⏎  without touching a button
+      row.querySelector('input').addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        if (i === state.segs.length - 1) addWall(); else focusWall(i + 1);
+      });
       row.querySelector('.del').addEventListener('click', function () { state.segs.splice(i, 1); state.preset = null; renderSegs(); sync(); });
       segsEl.appendChild(row);
       if (s.dir === 'A') {
@@ -4839,6 +4849,8 @@ window.TBstate = {
         state.boxes.push({ t: k[0], sub: !!k[1], side: 'left', along: 0, w: k[3], d: k[2] });
         state.sel = state.boxes.length - 1;
         renderBoxes(); sync();
+        var card = document.getElementById('box-list').lastElementChild;
+        var inp = card && card.querySelector('input'); if (inp) { inp.focus(); inp.select(); }
       });
       host.appendChild(b);
     });
@@ -4893,9 +4905,27 @@ window.TBstate = {
       return;
     }
     var g = gap(), n = state.segs.length;
+    var unmeasured = -1;
+    state.segs.forEach(function (sg, i) { if (!(sg.len > 0) && unmeasured < 0) unmeasured = i; });
     if (n < 3) { statusEl.className = 'map-status gap'; statusEl.innerHTML = '<span>⚠</span><span>A room needs at least 3 walls.</span>'; return; }
-    if (g < 0.02) { statusEl.className = 'map-status ok'; statusEl.innerHTML = '<span>✓</span><span>Closes clean — ' + n + ' walls.</span>'; }
-    else { statusEl.className = 'map-status gap'; statusEl.innerHTML = '<span>⚠</span><span>Off by <b>' + fmtLen(g) + '</b> — the last wall doesn\'t land back at the start. Fix a length, or tap <b>Close the loop</b>.</span>'; }
+    if (g < 0.02 && unmeasured < 0) { statusEl.className = 'map-status ok'; statusEl.innerHTML = '<span>✓</span><span>Closes clean — ' + n + ' walls.</span>'; return; }
+    // mid-walk isn't an error — a wall you haven't taped yet is just the next step
+    if (unmeasured >= 0 && unmeasured === n - 1) {
+      var leg = closingLeg();
+      statusEl.className = 'map-status';
+      statusEl.innerHTML = '<span>…</span><span>Wall ' + n + ' needs a length' +
+        (leg ? ' — or let the app finish it: <button class="map-cta" type="button" id="map-cta-close">close with ' + fmtLen(leg.len) + ' ' + HEADWORD[leg.dir] + '</button>' : '') + '</span>';
+      var cta = document.getElementById('map-cta-close');
+      if (cta) cta.addEventListener('click', closeLoop);
+      return;
+    }
+    if (unmeasured >= 0) { statusEl.className = 'map-status'; statusEl.innerHTML = '<span>…</span><span>Wall ' + (unmeasured + 1) + ' still needs a length.</span>'; return; }
+    var leg2 = closingLeg();
+    statusEl.className = 'map-status gap';
+    statusEl.innerHTML = '<span>⚠</span><span>Off by <b>' + fmtLen(g) + '</b> — the walk doesn\'t land back at the start. Fix a length, or ' +
+      (leg2 ? '<button class="map-cta" type="button" id="map-cta-close">add the closing wall: ' + fmtLen(leg2.len) + ' ' + HEADWORD[leg2.dir] + '</button>' : 'tap <b>Close the loop</b>') + '.</span>';
+    var cta2 = document.getElementById('map-cta-close');
+    if (cta2) cta2.addEventListener('click', closeLoop);
   }
 
   /* The mapped room used to be an island: a perfect cut list that the order list and
@@ -4955,18 +4985,41 @@ window.TBstate = {
   }
 
   /* ---- wiring ---- */
-  document.getElementById('map-add').addEventListener('click', function () {
-    state.segs.push({ dir: 'R', len: 48, ang: 0 }); state.preset = null; renderPresets(); renderSegs(); sync();
-  });
-  document.getElementById('map-fit').addEventListener('click', function () {   // add the wall that lands back on the start
+  function focusWall(i) {                     // put the cursor where the tape is
+    var rows = segsEl.querySelectorAll('.map-row input[type="number"]');
+    var el = rows[i]; if (!el) return;
+    el.focus(); el.select();
+    if (el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+  }
+  function addWall() {
+    // a new wall continues the walk: it turns RIGHT off the last one (the common corner)
+    // and starts UNMEASURED — the app doesn't invent 48″ of room that was never taped
+    var last = state.segs[state.segs.length - 1];
+    var dir = last ? dirFromAng((angOf(last) + 90) % 360) : 'R';
+    state.segs.push({ dir: dir === 'A' ? 'A' : dir, len: 0, ang: dir === 'A' ? (angOf(last) + 90) % 360 : 0 });
+    state.preset = null; renderPresets(); renderSegs(); sync();
+    focusWall(state.segs.length - 1);
+  }
+  // the leg that lands back on the start — used by the button AND the status line's offer
+  function closingLeg() {
     var v = verts(), a = v[0], b = v[v.length - 1], dx = a.x - b.x, dy = a.y - b.y;
     var L = Math.sqrt(dx * dx + dy * dy);
-    if (L < 0.02) return;
+    if (L < 0.02) return null;
     var ang = Math.round(Math.atan2(dy, dx) * 180 / Math.PI * 100) / 100;
     var named = DIRS.filter(function (d) { return d[2] !== null && Math.abs(((ang - d[2]) % 360 + 360) % 360) < 0.05; })[0];
-    state.segs.push(named ? { dir: named[0], len: L, ang: 0 } : { dir: 'A', len: L, ang: ang });
+    return named ? { dir: named[0], len: L, ang: 0 } : { dir: 'A', len: L, ang: ang };
+  }
+  function closeLoop() {
+    // an unmeasured last wall is begging to BE the closing leg — fill it instead of
+    // stacking another wall after it
+    var leg = closingLeg(); if (!leg) return;
+    var last = state.segs[state.segs.length - 1];
+    if (last && !(last.len > 0)) { last.dir = leg.dir; last.len = leg.len; last.ang = leg.ang; }
+    else state.segs.push(leg);
     state.preset = null; renderPresets(); renderSegs(); sync();
-  });
+  }
+  document.getElementById('map-add').addEventListener('click', addWall);
+  document.getElementById('map-fit').addEventListener('click', closeLoop);
   (function () {
     var seg = document.getElementById('room-use');
     if (seg) seg.querySelectorAll('button').forEach(function (b) {
