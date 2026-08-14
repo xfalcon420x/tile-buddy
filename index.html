@@ -748,7 +748,7 @@
       <div class="chips" id="band-add"></div>
       <div class="dgm" data-dgm="band"></div>
       <div id="band-list"></div>
-      <div id="box-list"></div>
+      <div id="panel-box-list"></div>
       <p class="field-hint">A band cuts the wall in two: the courses below run up off the floor, and the courses above start a <b>fresh full course off the top of the band</b> — which is how it's actually set.</p>
     </div>
 
@@ -1339,6 +1339,17 @@ window.TBstate = {
     // this IIFE is defined before the 2D engine, so on the very first paint TBEngine
     // isn't there yet to answer for the cut sizes — come back once the file has finished
     if (!window.TBEngine || !window.TBEngine.bottomCut) { setTimeout(renderVModes, 0); return; }
+    // the vertical start is a GRID idea — an angled pattern sets out from a centred
+    // lattice, and showing these buttons under herringbone would promise a cut size
+    // the engine isn't going to make
+    var pat = (window.TB && window.TB.pattern) || 'straight';
+    var lab = el.previousElementSibling;
+    if (!window.TBEngine.GRID[pat]) {
+      el.innerHTML = ''; if (lab) lab.hidden = true;
+      if (note) note.innerHTML = 'This pattern sets out from the centre of the wall — there\'s no course to start flush, so the up-the-wall choice doesn\'t apply. Every edge piece is an angled cut either way.';
+      return;
+    }
+    if (lab) lab.hidden = false;
     var rec = recommendV(), active = currentVMode(), floorSurf = isFloorSurf();
     el.innerHTML = '';
     VMODES.forEach(function (m) {
@@ -1588,6 +1599,8 @@ window.TBstate = {
   }
   function sync() { refreshChips(); render(); }
 
+  window.addEventListener('tb-change', renderVModes);   // the pattern picker lives in another scope
+
   document.getElementById('wall').addEventListener('input', function (e) { A().w = window.TBU.toIn(parseFloat(e.target.value) || 0); state.mode = null; state.vmode = null; renderSurfList(); sync(); });
   document.getElementById('height').addEventListener('input', function (e) { A().h = window.TBU.toIn(parseFloat(e.target.value) || 0); renderSurfList(); sync(); });
   document.getElementById('wtop').addEventListener('input', function (e) {
@@ -1812,7 +1825,7 @@ window.TBstate = {
     if (e.id === 'none') return base;
     // the border wraps the opening, so it is the opening's perimeter — not the box's inside
     var per = 2 * (n.w + n.h), cnt = Math.ceil(per / e.unit);
-    return base + '<br><b>' + e.name + '</b> around the opening — <b>' + fmtFrac(per) + '″</b> (' +
+    return base + '<br><b>' + e.name + '</b> around the opening — <b>' + window.TBU.fmt(per) + '</b> (' +
       (per / 12).toFixed(1) + ' ft) → <b>' + cnt + '</b> ' + e.buy + (cnt === 1 ? '' : 's') +
       (e.buy === 'stick' ? ' at 8 ft. Mitre the corners.' : '. Mitre or butt the corners.');
   }
@@ -1943,9 +1956,9 @@ window.TBstate = {
       var prof = SCHLUTER.filter(function (k) { return k[0] === tr.profile; })[0] || SCHLUTER[1];
       order = ' Order <b>' + prof[1] + '</b> in the <b>' + toDim(tr.thick) + '</b> height — that number is the tile thickness it sits against, not the face.';
     }
-    rep.innerHTML = 'Field is now <b>' + fmtFrac(fw) + '″ × ' + fmtFrac(fh) + '″</b> — the layout re-centres in that. ' +
-      'Trim run <b>' + fmtFrac(lin) + '″</b> (' + (lin / 12).toFixed(1) + ' ft) → <b>' + Math.ceil(lin / pieceLen) + '</b> ' +
-      (tr.type === 'bullnose' ? 'bullnose piece' + (Math.ceil(lin / pieceLen) === 1 ? '' : 's') + ' at ' + fmtFrac(pieceLen) + '″'
+    rep.innerHTML = 'Field is now <b>' + window.TBU.fmt(fw) + ' × ' + window.TBU.fmt(fh) + '</b> — the layout re-centres in that. ' +
+      'Trim run <b>' + window.TBU.fmt(lin) + '</b> (' + (lin / 12).toFixed(1) + ' ft) → <b>' + Math.ceil(lin / pieceLen) + '</b> ' +
+      (tr.type === 'bullnose' ? 'bullnose piece' + (Math.ceil(lin / pieceLen) === 1 ? '' : 's') + ' at ' + window.TBU.fmt(pieceLen) + ''
                               : 'stick' + (Math.ceil(lin / pieceLen) === 1 ? '' : 's') + ' at 8 ft') + '.' + order;
   }
   document.getElementById('trim-w').addEventListener('input', function (e) { trimOf().w = window.TBU.toIn(parseFloat(e.target.value) || 0); renderTrim(); render(); });
@@ -2005,10 +2018,10 @@ window.TBstate = {
     var pitch = (k.buy === 'stick') ? (k.unit || per) : (per + state.grout);
     var n = Math.ceil(run / pitch);
     var unitTxt = (k.buy === 'stick') ? '<b>' + n + '</b> stick' + (n === 1 ? '' : 's') + ' at 8 ft'
-                : (k.buy === 'sheet') ? '<b>' + n + '</b> sheet' + (n === 1 ? '' : 's') + ' at ' + fmtFrac(per) + '″'
-                : '<b>' + n + '</b> piece' + (n === 1 ? '' : 's') + ' at ' + fmtFrac(per) + '″';
-    box.querySelector('.band-note').innerHTML = 'Runs <b>' + fmtFrac(run) + '″</b> across at <b>' + fmtFrac(b.y) + '″</b> up, ' +
-      fmtFrac(b.h) + '″ tall — ' + unitTxt + '.' +
+                : (k.buy === 'sheet') ? '<b>' + n + '</b> sheet' + (n === 1 ? '' : 's') + ' at ' + window.TBU.fmt(per) + ''
+                : '<b>' + n + '</b> piece' + (n === 1 ? '' : 's') + ' at ' + window.TBU.fmt(per) + '';
+    box.querySelector('.band-note').innerHTML = 'Runs <b>' + window.TBU.fmt(run) + '</b> across at <b>' + window.TBU.fmt(b.y) + '</b> up, ' +
+      window.TBU.fmt(b.h) + ' tall — ' + unitTxt + '.' +
       (k.buy === 'stick' ? ' Profiles butt end to end, so no joint between sticks.' : '');
   }
   function trimIn2(tr) { var w = tr && tr.w || 0; return { l: tr && tr.l ? w : 0, r: tr && tr.r ? w : 0, t: tr && tr.t ? w : 0, b: tr && tr.b ? w : 0 }; }
@@ -2037,7 +2050,7 @@ window.TBstate = {
     renderBoxes(); render();
   }
   function renderBoxes() {
-    var host = document.getElementById('box-list'), a = A(), U = window.TBU;
+    var host = document.getElementById('panel-box-list'), a = A(), U = window.TBU;
     if (!host) return;
     if (!a.boxes) a.boxes = [];
     host.innerHTML = '';
@@ -2073,8 +2086,8 @@ window.TBstate = {
       ? '⚠ The border is wider than the box allows — the panel inside would vanish.'
       : hitsNiche
       ? '⚠ This box runs into the niche opening — a mitred border can\'t cross a hole. Move one of them; the box is left out of the layout until they clear.'
-      : 'Panel inside comes to <b>' + fmtFrac(b.w - 2 * b.tw) + '″ × ' + fmtFrac(b.h - 2 * b.tw) + '″</b>. ' +
-        'Border run ~<b>' + fmtFrac(per) + '″</b> on the centreline — mitre the four corners.';
+      : 'Panel inside comes to <b>' + window.TBU.fmt(b.w - 2 * b.tw) + ' × ' + window.TBU.fmt(b.h - 2 * b.tw) + '</b>. ' +
+        'Border run ~<b>' + window.TBU.fmt(per) + '</b> on the centreline — mitre the four corners.';
   }
 
   /* ---- heated floor ----
@@ -2424,10 +2437,10 @@ window.TBstate = {
       // The sheet-to-sheet joint the user set doesn't govern the piece joints.
       var pj = Math.min(pc[0], pc[1]) < 1.5 ? 0.0625 : Math.min(J, 0.125);
       L = pc[0]; W = pc[1]; J = pj;
-      whyTxt = 'sq ft per 25 lb bag · from the ' + window.TBU.numStr(L) + '×' + window.TBU.numStr(W) + '″ pieces, not the sheet';
+      whyTxt = 'sq ft per 25 lb bag · from the ' + window.TBU.fmt(L) + ' × ' + window.TBU.fmt(W) + ' pieces, not the sheet';
     } else {
       if (T.shape === 'hex' || T.pattern === 'hex') { W = L = Math.min(L, W); }   // across-flats behaves like a square of that side
-      whyTxt = 'sq ft per 25 lb bag · from ' + window.TBU.numStr(L) + '×' + window.TBU.numStr(W) + ' at a ' + window.TBU.numStr(J) + '″ joint';
+      whyTxt = 'sq ft per 25 lb bag · from ' + window.TBU.numStr(L) + '×' + window.TBU.numStr(W) + ' at a ' + window.TBU.fmt(J) + ' joint';
     }
     state.groutCov = groutCoverage(L, W, J);
     var el = document.getElementById('grout-cov'); if (el) el.value = state.groutCov;
@@ -2559,7 +2572,7 @@ window.TBstate = {
         (((window.TB || {}).surfaces) || []).forEach(function (sf) { (sf.drains || []).forEach(function (d) { drains.push(d); }); });
         if (!drains.length) out.push({ name: 'Bonded drain', sub: 'flange that ties into the membrane', qty: 1, unit: 'drain' });
         else drains.forEach(function (d) {
-          out.push({ name: d.t + (/linear/i.test(d.t) ? ' kit' : ''), sub: window.TBU.numStr(d.w) + ' × ' + window.TBU.numStr(d.h) + '″ · flange ties into the membrane', qty: 1, unit: 'drain' });
+          out.push({ name: d.t + (/linear/i.test(d.t) ? ' kit' : ''), sub: window.TBU.numStr(d.w) + ' × ' + window.TBU.fmt(d.h) + ' · flange ties into the membrane', qty: 1, unit: 'drain' });
         });
       }
     }
@@ -2647,7 +2660,7 @@ window.TBstate = {
     // marble saddles — one per doorway, sized to what was measured
     (T.surfaces || []).forEach(function (s) {
       if (/threshold|saddle/i.test(s.type || '') && s.w > 0)
-        out.push({ name: 'Threshold / saddle', sub: window.TBU.numStr(s.w) + '″ doorway · stone saddle, set in thinset, pitched away from the wet side', qty: 1, unit: 'saddle' });
+        out.push({ name: 'Threshold / saddle', sub: window.TBU.fmt(s.w) + ' doorway · stone saddle, set in thinset, pitched away from the wet side', qty: 1, unit: 'saddle' });
     });
     return out;
   }
@@ -2658,7 +2671,7 @@ window.TBstate = {
       var st = { penny: 'Penny rounds', hex1: '1″ hex', hex2: '2″ hex', sq1: '1″ squares', sq2: '2″ squares', kit: 'Kit-kat / finger' }[T.sheetStyle] || 'Mosaic';
       return st + ' — mesh sheets';
     }
-    if (T.shape === 'hex') return 'Hex tile (' + window.TBU.numStr(T.tw || 12) + '″ across flats)';
+    if (T.shape === 'hex') return 'Hex tile (' + window.TBU.fmt(T.tw || 12) + ' across flats)';
     return 'Tile';
   }
 
@@ -4306,6 +4319,17 @@ window.TBstate = {
     var extras = [];
     var trimTxt = (document.getElementById('trim-report') || {}).textContent || '';
     if (trimTxt && !/No trim/.test(trimTxt)) extras.push('<tr><td>Edge trim</td><td>' + esc(trimTxt.replace(/\s+/g, ' ').trim()) + '</td></tr>');
+    // the two start decisions ARE the layout — a sheet without them tells the helper
+    // what to cut but not where the first tile goes
+    var hl = document.getElementById('headline');
+    if (hl && hl.textContent.trim() && hl.textContent.trim() !== '—')
+      extras.unshift('<tr><td>Start across</td><td>' + esc(hl.textContent.replace(/\s+/g, ' ').trim()) + '</td></tr>');
+    var vm = document.querySelector('#vmodes .mode[aria-pressed="true"]');
+    if (vm) {
+      var vn = vm.querySelector('.mname'), vc = vm.querySelector('.mcut');
+      extras.splice(1, 0, '<tr><td>Start up the wall</td><td>' + esc((vn ? vn.textContent : '').replace(/Best lay/, '').replace(/\s+/g, ' ').trim()) +
+        (vc ? ' — ' + esc(vc.textContent.replace(/\s+/g, ' ').trim()) : '') + '</td></tr>');
+    }
     [].slice.call(document.querySelectorAll('.niche-item')).forEach(function (el) {
       var nm = el.querySelector('.hname'), tm = el.querySelector('.niche-trim');
       if (nm && tm) extras.push('<tr><td>' + esc(nm.textContent) + ' surround</td><td>' + esc(tm.textContent.replace(/\s+/g, ' ').trim()) + '</td></tr>');
